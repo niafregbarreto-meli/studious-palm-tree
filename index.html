@@ -232,6 +232,9 @@
   .kpi.alerta { border-left-color: var(--ml-red); }
   .kpi.rotas  { border-left-color: var(--ml-orange); }
   .kpi.valor  { border-left-color: var(--ml-green); }
+  .kpi.persist    { border-left-color: var(--ml-red); }
+  .kpi.novos      { border-left-color: var(--ml-blue); }
+  .kpi.resolvidos { border-left-color: var(--ml-green); }
   .kpi .kpi-num { font-size: 26px; font-weight: 700; line-height: 1.1; }
   .kpi .kpi-lab { font-size: 12px; color: var(--text-soft); margin-top: 4px; text-transform: uppercase; letter-spacing: .03em; }
 
@@ -309,10 +312,26 @@
   .col-id { font-family: "SF Mono", Menlo, Consolas, monospace; white-space: nowrap; }
   .col-valor { white-space: nowrap; font-weight: 700; text-align: right; }
   .col-conteudo { max-width: 380px; }
-  .col-ponto, .col-parada { text-align: center; white-space: nowrap; }
+  .col-ponto, .col-parada, .col-tempo, .col-desde { text-align: center; white-space: nowrap; }
   .th-right { text-align: right; }
   .th-center { text-align: center; }
   .sem-dado { color: var(--text-muted); font-style: italic; }
+
+  /* destaque por tempo parado */
+  tr.linha-atencao { background: #FFF8E8; }
+  tr.linha-critica { background: #FDECEC; }
+  tr.linha-critica .col-tempo { color: var(--ml-red); font-weight: 700; }
+
+  .tag-novo {
+    display: inline-block;
+    background: #E3F0FF;
+    color: var(--ml-blue);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+  .rota-metricas .m.tempo strong { color: var(--ml-orange); }
 
   /* ─── Estados vazios / avisos ──────────────────────────────── */
   .vazio { text-align: center; padding: 50px 20px; color: var(--text-muted); }
@@ -579,10 +598,21 @@
 (function () {
   "use strict";
 
+  // ─── Configuração ────────────────────────────────────────────
+  // Opcional: URL do CSV "Publicar na web" da planilha de valores
+  // (Q_BACKOFFICE conectada ao BigQuery). Se preenchida, os valores são
+  // buscados automaticamente e o usuário só precisa carregar os faltantes.
+  var URL_VALORES_CSV = "";
+
   // ─── Estado ──────────────────────────────────────────────────
   var faltantes = [];   // linhas "Na estação"
   var valores   = {};   // mapa ID -> { valor, valorNum, conteudo }
   var comValores = false;
+
+  // ─── Histórico (localStorage) ────────────────────────────────
+  var STORAGE_KEY    = "bingo_historico_SSC2";
+  var resolvidos     = 0;      // pacotes que sairam da estação desde a última carga
+  var houveHistorico = false;  // já existia uma carga anterior?
 
   // ─── Lembrete de atualização ─────────────────────────────────
   var intervaloMin      = 30;    // 30 min (tranquilo) ou 45 min (congestionado)
@@ -683,6 +713,60 @@
 
   function formatarBRL(num) {
     return "R$ " + num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function formatarMinutos(min) {
+    if (min < 60) return min + " min";
+    var h = Math.floor(min / 60), m = min % 60;
+    return h + "h" + (m > 0 ? " " + m + "min" : "");
+  }
+
+  function formatarHora(ts) {
+    if (!ts) return "—";
+    var d = new Date(ts);
+    return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+  }
+
+  // ─── Histórico persistente (localStorage) ────────────────────
+  function carregarHistorico() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : { seen: {}, ultimaCarga: 0 };
+    } catch (e) { return { seen: {}, ultimaCarga: 0 }; }
+  }
+
+  function salvarHistorico(h) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(h)); } catch (e) { /* quota */ }
+  }
+
+  // Cruza os faltantes atuais com o histórico:
+  // - calcula há quanto tempo cada pacote está "Na estação" (primeira leitura)
+  // - marca os novos e conta os que já sairam (resolvidos)
+  function aplicarHistorico() {
+    var agora = Date.now();
+    var hist = carregarHistorico();
+    houveHistorico = hist.ultimaCarga > 0;
+
+    var idsAtuais = {};
+    faltantes.forEach(function (f) { idsAtuais[f.id] = true; });
+
+    // resolvidos = estavam no histórico e não estão mais na estação
+    resolvidos = 0;
+    Object.keys(hist.seen).forEach(function (id) {
+      if (!idsAtuais[id]) resolvidos++;
+    });
+
+    var novoSeen = {};
+    faltantes.forEach(function (f) {
+      var primeira = hist.seen[f.id];
+      f.novo = (primeira === undefined);
+      if (f.novo) primeira = agora;
+      f.desde = primeira;
+      f.minutos = Math.max(0, Math.round((agora - primeira) / 60000));
+      novoSeen[f.id] = primeira; // preserva o first-seen; os que sairam são descartados
+    });
+
+    salvarHistorico({ seen: novoSeen, ultimaCarga: agora });
   }
 
   // Ordena rotas: letra alfabética, depois número (A1, A2, B1...)
@@ -799,6 +883,9 @@
       return;
     }
 
+    // cruza com o histórico local (tempo na estação, novos, resolvidos)
+    aplicarHistorico();
+
     // marca dropzone como ok
     var dz = $("#dz-faltantes");
     dz.classList.add("ok");
@@ -807,11 +894,37 @@
     nome.classList.remove("oculto");
 
     gerarConsulta();
+    marcarEtapa(1, "concluida");
+
+    // Se houver planilha de valores publicada, busca automaticamente;
+    // caso contrário, mostra o fluxo manual (etapas 2 e 3).
+    if (tentarAutoValores()) return;
+
     $("#card-2").classList.remove("oculto");
     $("#card-3").classList.remove("oculto");
-    marcarEtapa(1, "concluida");
     marcarEtapa(2, "ativa");
     $("#card-2").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // Busca automática de valores a partir de uma planilha publicada (CSV)
+  function tentarAutoValores() {
+    if (!URL_VALORES_CSV) return false;
+    toast("Buscando valores automaticamente...");
+    fetch(URL_VALORES_CSV, { cache: "no-store" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.text();
+      })
+      .then(function (t) { processarValores(t); })
+      .catch(function () {
+        // fallback para o modo manual
+        $("#card-2").classList.remove("oculto");
+        $("#card-3").classList.remove("oculto");
+        marcarEtapa(2, "ativa");
+        toast("Não foi possível buscar os valores. Use o modo manual.");
+        $("#card-2").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    return true;
   }
 
   // ─── ETAPA 2: gerar consulta com IDs ─────────────────────────
@@ -898,14 +1011,20 @@
         ponto: f.ponto,
         valor: v.valor || "",
         valorNum: v.valorNum || 0,
-        conteudo: v.conteudo || ""
+        conteudo: v.conteudo || "",
+        minutos: f.minutos || 0,
+        desde: f.desde || 0,
+        novo: !!f.novo
       };
       if (!grupos[f.rota]) grupos[f.rota] = [];
       grupos[f.rota].push(item);
     });
-    // ordena cada grupo por valor desc
+    // ordena cada grupo: por valor desc; sem valor, pelo maior tempo parado
     Object.keys(grupos).forEach(function (r) {
-      grupos[r].sort(function (a, b) { return b.valorNum - a.valorNum; });
+      grupos[r].sort(function (a, b) {
+        if (comValores && b.valorNum !== a.valorNum) return b.valorNum - a.valorNum;
+        return b.minutos - a.minutos;
+      });
     });
     return grupos;
   }
@@ -919,15 +1038,21 @@
 
     // Resumo
     var totalPacotes = faltantes.length;
-    var totalValor = 0;
+    var totalValor = 0, novos = 0, persistentes = 0;
     faltantes.forEach(function (f) {
       var v = valores[f.id];
       if (v) totalValor += v.valorNum;
+      if (f.novo) novos++; else persistentes++;
     });
 
     var resumoHtml =
       kpi("alerta", totalPacotes, "Pacotes na estação") +
       kpi("rotas", rotas.length, "Rotas afetadas");
+    if (houveHistorico) {
+      resumoHtml += kpi("persist", persistentes, "Persistem da carga anterior");
+      resumoHtml += kpi("novos", novos, "Novos nesta carga");
+      resumoHtml += kpi("resolvidos", resolvidos, "Resolvidos desde a última");
+    }
     if (comValores) {
       resumoHtml += kpi("valor", formatarBRL(totalValor), "Valor total em risco");
     }
@@ -976,10 +1101,20 @@
       var conteudoCel = comValores
         ? '<td class="col-conteudo">' + (i.conteudo ? escapar(i.conteudo) : '<span class="sem-dado">—</span>') + '</td>'
         : "";
-      return '<tr data-busca="' + escapar((i.id + " " + rota + " " + i.conteudo).toLowerCase()) + '">' +
+      // classe de destaque conforme o tempo parado na estação
+      var classe = i.minutos >= 60 ? "linha-critica"
+                 : i.minutos >= 30 ? "linha-atencao" : "";
+      var tempoCel = houveHistorico
+        ? '<td class="col-tempo">' +
+            (i.novo ? '<span class="tag-novo">Novo</span>' : formatarMinutos(i.minutos)) +
+          '</td>' +
+          '<td class="col-desde">' + formatarHora(i.desde) + '</td>'
+        : "";
+      return '<tr class="' + classe + '" data-busca="' + escapar((i.id + " " + rota + " " + i.conteudo).toLowerCase()) + '">' +
         '<td class="col-id">' + escapar(i.id) + '</td>' +
         valorCel +
         conteudoCel +
+        tempoCel +
         '<td class="col-parada">' + escapar(i.parada || "—") + '</td>' +
         '<td class="col-ponto">' + escapar(i.ponto || "—") + '</td>' +
       '</tr>';
@@ -987,9 +1122,15 @@
 
     var thValor = comValores ? '<th class="th-right">Valor</th>' : "";
     var thConteudo = comValores ? '<th>Conteúdo</th>' : "";
+    var thTempo = houveHistorico ? '<th class="th-center">Tempo parado</th><th class="th-center">Desde</th>' : "";
 
     var metricaValor = comValores
       ? '<span class="m destaque">Valor: <strong>' + formatarBRL(totalValor) + '</strong></span>'
+      : "";
+    // maior tempo parado da rota
+    var maxMin = itens.reduce(function (mx, i) { return Math.max(mx, i.minutos); }, 0);
+    var metricaTempo = houveHistorico
+      ? '<span class="m tempo">Máx parado: <strong>' + formatarMinutos(maxMin) + '</strong></span>'
       : "";
 
     return '<div class="rota-cartao" data-rota="' + escapar(rota) + '">' +
@@ -1000,6 +1141,7 @@
         '</div>' +
         '<div class="rota-metricas">' +
           '<span class="m"><strong>' + itens.length + '</strong> pacote(s)</span>' +
+          metricaTempo +
           metricaValor +
         '</div>' +
         '<span class="seta">&#9660;</span>' +
@@ -1010,6 +1152,7 @@
             '<th>ID do pacote</th>' +
             thValor +
             thConteudo +
+            thTempo +
             '<th class="th-center">Parada</th>' +
             '<th class="th-center">Ponto</th>' +
           '</tr></thead>' +
@@ -1050,12 +1193,14 @@
     var linhas = [];
     var cab = ["ROTA", "ID_PACOTE"];
     if (comValores) { cab.push("VALOR"); cab.push("CONTEUDO"); }
+    if (houveHistorico) { cab.push("TEMPO_MIN"); cab.push("DESDE"); cab.push("NOVO"); }
     cab.push("PARADA"); cab.push("PONTO"); cab.push("ROTA_COMPLETA");
     linhas.push(cab.join(";"));
     rotas.forEach(function (r) {
       grupos[r].forEach(function (i) {
         var campos = [r, i.id];
         if (comValores) { campos.push(i.valor || formatarBRL(i.valorNum)); campos.push('"' + (i.conteudo || "").replace(/"/g, '""') + '"'); }
+        if (houveHistorico) { campos.push(i.minutos); campos.push(formatarHora(i.desde)); campos.push(i.novo ? "SIM" : "NAO"); }
         campos.push(i.parada); campos.push(i.ponto); campos.push(i.rotaCompleta);
         linhas.push(campos.join(";"));
       });
@@ -1076,6 +1221,7 @@
   // ─── Reiniciar ───────────────────────────────────────────────
   function reiniciar() {
     faltantes = []; valores = {}; comValores = false;
+    resolvidos = 0; houveHistorico = false;
     pararLembrete();
     ciclosLembrete = 0; intervaloMin = 30;
     $("#lembrete-topo").classList.add("oculto");
