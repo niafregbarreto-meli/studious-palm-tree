@@ -88,6 +88,19 @@
     margin-left: 4px;
   }
   .lembrete-topo strong { color: #2D3277; }
+  .btn-topo {
+    background: #2D3277;
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: opacity .15s;
+  }
+  .btn-topo:hover { opacity: .88; }
 
   /* ─── Layout principal ─────────────────────────────────────── */
   main {
@@ -333,6 +346,51 @@
   }
   .rota-metricas .m.tempo strong { color: var(--ml-orange); }
 
+  /* seleção e auditoria */
+  .col-sel { width: 34px; text-align: center; }
+  .col-sel input, .rota-sel input { width: 16px; height: 16px; cursor: pointer; }
+  .rota-sel { display: flex; align-items: center; }
+  tr.encontrado { opacity: .55; }
+  tr.encontrado .col-id { text-decoration: line-through; }
+  .btn-encontrado {
+    border: 1px solid var(--ml-green);
+    background: #fff;
+    color: var(--ml-green);
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+  .btn-encontrado.ativo { background: var(--ml-green); color: #fff; }
+  .auditoria {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-soft);
+  }
+  .auditoria input {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 4px 8px;
+    font-size: 12px;
+    font-family: inherit;
+    width: 130px;
+  }
+  .auditoria.feita { color: var(--ml-green); font-weight: 600; }
+  .selecao-info { font-size: 13px; color: var(--text-soft); margin-right: auto; }
+  .selecao-info strong { color: var(--text); }
+
+  /* impressão */
+  @media print {
+    body * { visibility: hidden; }
+    #area-impressao, #area-impressao * { visibility: visible; }
+    #area-impressao { position: absolute; left: 0; top: 0; width: 100%; }
+  }
+
   /* ─── Estados vazios / avisos ──────────────────────────────── */
   .vazio { text-align: center; padding: 50px 20px; color: var(--text-muted); }
   .aviso {
@@ -447,6 +505,7 @@
       <span class="lembrete-topo oculto" id="lembrete-topo">
         Próxima verificação: <strong id="lembrete-tempo">30:00</strong>
       </span>
+      <button class="btn-topo oculto" id="btn-verificar" title="Baixar os faltantes e verificar agora">Verificar agora</button>
     </div>
   </div>
 </header>
@@ -568,8 +627,18 @@
       <button class="btn btn-neutro" id="btn-reiniciar">Reiniciar</button>
     </div>
 
+    <div class="ferramentas">
+      <span class="selecao-info">Selecionados: <strong id="qtd-selecionados">0</strong></span>
+      <button class="btn btn-secundario" id="btn-sel-todos">Selecionar tudo</button>
+      <button class="btn btn-secundario" id="btn-sel-limpar">Limpar seleção</button>
+      <button class="btn btn-primario" id="btn-pdf">Gerar PDF de impressão</button>
+    </div>
+
     <div id="lista-rotas"></div>
   </section>
+
+  <!-- Área usada apenas para impressão em PDF -->
+  <div id="area-impressao" style="display:none;"></div>
 
 </main>
 
@@ -609,10 +678,25 @@
   var valores   = {};   // mapa ID -> { valor, valorNum, conteudo }
   var comValores = false;
 
-  // ─── Histórico (localStorage) ────────────────────────────────
+  // ─── Histórico e estado persistente (localStorage) ───────────
   var STORAGE_KEY    = "bingo_historico_SSC2";
+  var KEY_LEMBRETE   = "bingo_lembrete_SSC2";
+  var KEY_ENCONTRADOS= "bingo_encontrados_SSC2";
+  var KEY_AUDITORIAS = "bingo_auditorias_SSC2";
   var resolvidos     = 0;      // pacotes que sairam da estação desde a última carga
   var houveHistorico = false;  // já existia uma carga anterior?
+
+  var encontrados  = {};  // id -> ts (pacotes marcados como encontrados)
+  var auditorias   = {};  // rota -> { rep, ts } (gaiola auditada)
+  var selecionados = {};  // id -> true (seleção para o PDF)
+
+  function lerJSON(chave, padrao) {
+    try { var r = localStorage.getItem(chave); return r ? JSON.parse(r) : padrao; }
+    catch (e) { return padrao; }
+  }
+  function gravarJSON(chave, valor) {
+    try { localStorage.setItem(chave, JSON.stringify(valor)); } catch (e) { /* quota */ }
+  }
 
   // ─── Lembrete de atualização ─────────────────────────────────
   var intervaloMin      = 30;    // 30 min (tranquilo) ou 45 min (congestionado)
@@ -790,20 +874,45 @@
   }
 
   // ─── Lembrete de atualização (30 / 45 min) ───────────────────
+  // Inicia um novo ciclo, gravando o prazo para sobreviver ao recarregar.
   function iniciarLembrete() {
+    var deadline = Date.now() + intervaloMin * 60000;
+    gravarJSON(KEY_LEMBRETE, { deadline: deadline, intervaloMin: intervaloMin });
+    rodarContador(deadline);
+  }
+
+  // Retoma o contador ao abrir a página (não reinicia ao sair).
+  function resumirLembrete() {
+    var st = lerJSON(KEY_LEMBRETE, null);
+    if (!st || !st.deadline) return;
+    intervaloMin = st.intervaloMin || 30;
+    if (st.deadline <= Date.now()) {
+      // o prazo já venceu enquanto a página estava fechada
+      $("#lembrete-topo").classList.remove("oculto");
+      $("#btn-verificar").classList.remove("oculto");
+      $("#lembrete-tempo").textContent = "00:00";
+      mostrarBannerLembrete();
+    } else {
+      rodarContador(st.deadline);
+    }
+  }
+
+  function rodarContador(deadline) {
     pararLembrete();
-    lembreteSegundos = intervaloMin * 60;
     $("#lembrete-topo").classList.remove("oculto");
-    atualizarLembreteTopo();
-    lembreteCountdown = setInterval(function () {
-      lembreteSegundos--;
+    $("#btn-verificar").classList.remove("oculto");
+    tick(deadline);
+    lembreteCountdown = setInterval(function () { tick(deadline); }, 1000);
+
+    function tick(dl) {
+      lembreteSegundos = Math.max(0, Math.round((dl - Date.now()) / 1000));
+      atualizarLembreteTopo();
       if (lembreteSegundos <= 0) {
         clearInterval(lembreteCountdown);
+        lembreteCountdown = null;
         dispararLembrete();
-      } else {
-        atualizarLembreteTopo();
       }
-    }, 1000);
+    }
   }
 
   function atualizarLembreteTopo() {
@@ -1068,7 +1177,7 @@
       });
     }
     $("#lista-rotas").innerHTML = html;
-    ligarCabecas();
+    atualizarSelecaoInfo();
 
     // esconde o banner de lembrete (recém-atualizado) e reinicia o contador
     $("#banner-lembrete").classList.add("oculto");
@@ -1104,19 +1213,25 @@
       // classe de destaque conforme o tempo parado na estação
       var classe = i.minutos >= 60 ? "linha-critica"
                  : i.minutos >= 30 ? "linha-atencao" : "";
+      var achado = !!encontrados[i.id];
+      if (achado) classe += " encontrado";
       var tempoCel = houveHistorico
         ? '<td class="col-tempo">' +
             (i.novo ? '<span class="tag-novo">Novo</span>' : formatarMinutos(i.minutos)) +
           '</td>' +
           '<td class="col-desde">' + formatarHora(i.desde) + '</td>'
         : "";
-      return '<tr class="' + classe + '" data-busca="' + escapar((i.id + " " + rota + " " + i.conteudo).toLowerCase()) + '">' +
+      var marcado = selecionados[i.id] ? " checked" : "";
+      return '<tr class="' + classe.trim() + '" data-busca="' + escapar((i.id + " " + rota + " " + i.conteudo).toLowerCase()) + '">' +
+        '<td class="col-sel"><input type="checkbox" class="sel-row" data-id="' + escapar(i.id) + '"' + marcado + '></td>' +
         '<td class="col-id">' + escapar(i.id) + '</td>' +
         valorCel +
         conteudoCel +
         tempoCel +
         '<td class="col-parada">' + escapar(i.parada || "—") + '</td>' +
         '<td class="col-ponto">' + escapar(i.ponto || "—") + '</td>' +
+        '<td class="col-acao"><button class="btn-encontrado' + (achado ? ' ativo' : '') + '" data-id="' + escapar(i.id) + '">' +
+          (achado ? 'Encontrado' : 'Marcar') + '</button></td>' +
       '</tr>';
     }).join("");
 
@@ -1133,8 +1248,17 @@
       ? '<span class="m tempo">Máx parado: <strong>' + formatarMinutos(maxMin) + '</strong></span>'
       : "";
 
+    // auditoria da gaiola (rota)
+    var aud = auditorias[rota];
+    var auditoriaHtml = aud
+      ? '<span class="auditoria feita" data-rota="' + escapar(rota) + '">Auditada por ' + escapar(aud.rep) + ' às ' + formatarHora(aud.ts) + '</span>'
+      : '<span class="auditoria" data-rota="' + escapar(rota) + '">Auditada por:' +
+          '<input type="text" class="input-rep" data-rota="' + escapar(rota) + '" placeholder="nome do rep" />' +
+        '</span>';
+
     return '<div class="rota-cartao" data-rota="' + escapar(rota) + '">' +
       '<div class="rota-cabeca">' +
+        '<label class="rota-sel" title="Selecionar toda a gaiola"><input type="checkbox" class="sel-rota" data-rota="' + escapar(rota) + '"></label>' +
         '<div class="rota-id">' +
           '<span class="nome">' + escapar(rota) + '</span>' +
           (completo ? '<span class="completo">' + escapar(completo) + '</span>' : "") +
@@ -1144,17 +1268,20 @@
           metricaTempo +
           metricaValor +
         '</div>' +
+        auditoriaHtml +
         '<span class="seta">&#9660;</span>' +
       '</div>' +
       '<div class="tabela-wrap">' +
         '<table class="pacotes">' +
           '<thead><tr>' +
+            '<th class="col-sel"></th>' +
             '<th>ID do pacote</th>' +
             thValor +
             thConteudo +
             thTempo +
             '<th class="th-center">Parada</th>' +
             '<th class="th-center">Ponto</th>' +
+            '<th class="th-center">Ação</th>' +
           '</tr></thead>' +
           '<tbody>' + linhas + '</tbody>' +
         '</table>' +
@@ -1162,12 +1289,84 @@
     '</div>';
   }
 
-  function ligarCabecas() {
-    $all(".rota-cabeca").forEach(function (cab) {
-      cab.addEventListener("click", function () {
+  // Interações delegadas em #lista-rotas (conteúdo é recriado a cada render)
+  function configurarInteracoes() {
+    var lista = $("#lista-rotas");
+
+    lista.addEventListener("click", function (e) {
+      var alvo = e.target;
+
+      // botão "Marcar / Encontrado"
+      var btn = alvo.closest(".btn-encontrado");
+      if (btn) {
+        alternarEncontrado(btn.getAttribute("data-id"), btn);
+        return;
+      }
+
+      // clique no cabeçalho recolhe/expande — exceto em controles interativos
+      var cab = alvo.closest(".rota-cabeca");
+      if (cab && !alvo.closest("input, label, button, .auditoria")) {
         cab.parentNode.classList.toggle("recolhido");
-      });
+      }
     });
+
+    lista.addEventListener("change", function (e) {
+      var alvo = e.target;
+      if (alvo.classList.contains("sel-row")) {
+        var id = alvo.getAttribute("data-id");
+        if (alvo.checked) selecionados[id] = true; else delete selecionados[id];
+        atualizarSelecaoInfo();
+      } else if (alvo.classList.contains("sel-rota")) {
+        var card = alvo.closest(".rota-cartao");
+        Array.prototype.slice.call(card.querySelectorAll(".sel-row")).forEach(function (chk) {
+          chk.checked = alvo.checked;
+          var id = chk.getAttribute("data-id");
+          if (alvo.checked) selecionados[id] = true; else delete selecionados[id];
+        });
+        atualizarSelecaoInfo();
+      }
+    });
+
+    // registrar auditoria ao pressionar Enter ou sair do campo
+    lista.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && e.target.classList.contains("input-rep")) {
+        registrarAuditoria(e.target);
+      }
+    });
+    lista.addEventListener("blur", function (e) {
+      if (e.target.classList.contains("input-rep") && e.target.value.trim()) {
+        registrarAuditoria(e.target);
+      }
+    }, true);
+  }
+
+  function alternarEncontrado(id, btn) {
+    if (encontrados[id]) { delete encontrados[id]; }
+    else { encontrados[id] = Date.now(); }
+    gravarJSON(KEY_ENCONTRADOS, encontrados);
+    var achado = !!encontrados[id];
+    btn.classList.toggle("ativo", achado);
+    btn.textContent = achado ? "Encontrado" : "Marcar";
+    var tr = btn.closest("tr");
+    if (tr) tr.classList.toggle("encontrado", achado);
+  }
+
+  function registrarAuditoria(input) {
+    var rota = input.getAttribute("data-rota");
+    var rep = input.value.trim();
+    if (!rep) return;
+    auditorias[rota] = { rep: rep, ts: Date.now() };
+    gravarJSON(KEY_AUDITORIAS, auditorias);
+    var span = input.closest(".auditoria");
+    if (span) {
+      span.classList.add("feita");
+      span.innerHTML = "Auditada por " + escapar(rep) + " às " + formatarHora(auditorias[rota].ts);
+    }
+    toast("Gaiola " + rota + " auditada por " + rep + ".");
+  }
+
+  function atualizarSelecaoInfo() {
+    $("#qtd-selecionados").textContent = Object.keys(selecionados).length;
   }
 
   // ─── Busca ───────────────────────────────────────────────────
@@ -1218,9 +1417,92 @@
     toast("CSV exportado.");
   }
 
+  // ─── Selecionar tudo / limpar ────────────────────────────────
+  function selecionarTudo(marcar) {
+    selecionados = {};
+    if (marcar) {
+      faltantes.forEach(function (f) { selecionados[f.id] = true; });
+    }
+    $all(".sel-row").forEach(function (chk) { chk.checked = marcar; });
+    $all(".sel-rota").forEach(function (chk) { chk.checked = marcar; });
+    atualizarSelecaoInfo();
+  }
+
+  // ─── PDF de impressão ────────────────────────────────────────
+  function gerarPDF() {
+    var ids = Object.keys(selecionados);
+    if (ids.length === 0) { toast("Selecione ao menos um pacote ou gaiola."); return; }
+
+    // agrupa os selecionados por rota
+    var grupos = agrupar();
+    var rotas = Object.keys(grupos).sort(ordenarRotas);
+    var agora = new Date();
+    var dataStr = agora.toLocaleString("pt-BR");
+
+    var corpo = "";
+    var totalSel = 0;
+    rotas.forEach(function (r) {
+      var sel = grupos[r].filter(function (i) { return selecionados[i.id]; });
+      if (sel.length === 0) return;
+      totalSel += sel.length;
+      var aud = auditorias[r];
+      var linhas = sel.map(function (i) {
+        return "<tr>" +
+          "<td>" + escapar(i.id) + "</td>" +
+          (comValores ? "<td>" + (i.valor || formatarBRL(i.valorNum)) + "</td>" : "") +
+          (comValores ? "<td>" + escapar(i.conteudo || "-") + "</td>" : "") +
+          "<td style='text-align:center'>" + escapar(i.parada || "-") + "</td>" +
+          "<td style='text-align:center'>" + escapar(i.ponto || "-") + "</td>" +
+          "<td style='text-align:center'>&#9744;</td>" +
+        "</tr>";
+      }).join("");
+      corpo +=
+        "<div class='grupo'>" +
+          "<h2>Gaiola " + escapar(r) + " &middot; " + sel.length + " pacote(s)" +
+            (aud ? " &middot; auditada por " + escapar(aud.rep) : "") + "</h2>" +
+          "<table>" +
+            "<thead><tr>" +
+              "<th>ID do pacote</th>" +
+              (comValores ? "<th>Valor</th>" : "") +
+              (comValores ? "<th>Conteúdo</th>" : "") +
+              "<th>Parada</th><th>Ponto</th><th>Achado</th>" +
+            "</tr></thead><tbody>" + linhas + "</tbody>" +
+          "</table>" +
+        "</div>";
+    });
+
+    var estilo =
+      "body{font-family:Arial,Helvetica,sans-serif;color:#222;margin:24px;}" +
+      "h1{font-size:18px;margin:0 0 2px;}" +
+      ".sub{font-size:12px;color:#666;margin-bottom:16px;}" +
+      ".grupo{margin-bottom:22px;page-break-inside:avoid;}" +
+      "h2{font-size:14px;background:#FFE600;padding:6px 10px;border-radius:4px;margin:0 0 6px;}" +
+      "table{width:100%;border-collapse:collapse;font-size:12px;}" +
+      "th,td{border:1px solid #CCC;padding:6px 8px;text-align:left;}" +
+      "th{background:#F2F2F2;}";
+
+    var doc =
+      "<!DOCTYPE html><html lang='pt-BR'><head><meta charset='UTF-8'>" +
+      "<title>Bingo Hora a Hora - Impressão</title><style>" + estilo + "</style></head><body>" +
+      "<h1>Bingo Hora a Hora &middot; SSC2</h1>" +
+      "<div class='sub'>Pacotes a buscar &middot; " + totalSel + " selecionado(s) &middot; gerado em " + dataStr + "</div>" +
+      corpo +
+      "</body></html>";
+
+    var w = window.open("", "_blank");
+    if (!w) { toast("Permita pop-ups para gerar o PDF."); return; }
+    w.document.open();
+    w.document.write(doc);
+    w.document.close();
+    w.focus();
+    setTimeout(function () { w.print(); }, 300);
+  }
+
   // ─── Reiniciar ───────────────────────────────────────────────
   function reiniciar() {
+    if (!window.confirm("Reiniciar vai limpar a tela atual. Deseja continuar?")) return;
     faltantes = []; valores = {}; comValores = false;
+    selecionados = {};
     resolvidos = 0; houveHistorico = false;
     pararLembrete();
     ciclosLembrete = 0; intervaloMin = 30;
@@ -1295,6 +1577,14 @@
     });
     $("#btn-exportar").addEventListener("click", exportarCSV);
     $("#btn-reiniciar").addEventListener("click", reiniciar);
+    $("#btn-sel-todos").addEventListener("click", function () { selecionarTudo(true); });
+    $("#btn-sel-limpar").addEventListener("click", function () { selecionarTudo(false); });
+    $("#btn-pdf").addEventListener("click", gerarPDF);
+
+    // Verificar agora: reabre o seletor de faltantes sem zerar o contador
+    $("#btn-verificar").addEventListener("click", function () {
+      $("#file-faltantes").click();
+    });
 
     $all("[data-fluxo]").forEach(function (b) {
       b.addEventListener("click", function () {
@@ -1304,6 +1594,12 @@
     $("#fechar-lembrete").addEventListener("click", function () {
       $("#banner-lembrete").classList.add("oculto");
     });
+
+    // carrega estado persistido e configura interações
+    encontrados = lerJSON(KEY_ENCONTRADOS, {});
+    auditorias  = lerJSON(KEY_AUDITORIAS, {});
+    configurarInteracoes();
+    resumirLembrete();
   });
 
 })();
