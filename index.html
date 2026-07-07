@@ -47,19 +47,19 @@
   .topo-inner {
     max-width: 1180px;
     margin: 0 auto;
-    padding: 12px 24px;
+    padding: 14px 24px;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 16px;
     position: relative;
-    min-height: 56px;
+    min-height: 66px;
   }
   .marca-grupo { display: flex; align-items: center; gap: 14px; }
-  .logo { height: 44px; width: auto; display: block; }
-  .marca { display: flex; flex-direction: column; }
-  .marca h1 { font-size: 19px; font-weight: 700; color: #2D3277; line-height: 1.15; }
-  .subtitulo { font-size: 12px; color: #5B5B5B; font-weight: 400; }
+  .logo { height: 42px; width: auto; display: block; flex-shrink: 0; }
+  .marca { display: flex; flex-direction: column; justify-content: center; }
+  .marca h1 { font-size: 19px; font-weight: 700; color: #2D3277; line-height: 1.25; margin: 0; }
+  .subtitulo { font-size: 12px; color: #5B5B5B; font-weight: 400; line-height: 1.3; margin-top: 3px; }
   .contexto {
     position: absolute;
     right: 24px;
@@ -439,6 +439,8 @@
   .modal h3 { font-size: 18px; font-weight: 700; color: #2D3277; margin-bottom: 8px; }
   .modal p { font-size: 13.5px; color: var(--text-soft); margin-bottom: 22px; }
   .modal-acoes { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .opcoes-pdf { text-align: left; display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+  .opcoes-pdf label { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
 
   /* ─── Banner de lembrete ───────────────────────────────────── */
   .banner-lembrete {
@@ -664,6 +666,22 @@
 <footer>
   Bingo Hora a Hora &middot; Ferramenta interna de monitoramento &middot; SSC2
 </footer>
+
+<!-- Modal: opções de impressão -->
+<div class="modal-overlay oculto" id="modal-pdf">
+  <div class="modal">
+    <h3>O que imprimir?</h3>
+    <p>Escolha as colunas que devem aparecer no PDF.</p>
+    <div class="opcoes-pdf">
+      <label><input type="radio" name="pdf-cols" value="basico" checked> Somente ID e conteúdo</label>
+      <label><input type="radio" name="pdf-cols" value="tudo"> Todas as colunas (valor, tempo, parada, ponto)</label>
+    </div>
+    <div class="modal-acoes">
+      <button class="btn btn-neutro" id="pdf-cancelar">Cancelar</button>
+      <button class="btn btn-primario" id="pdf-confirmar">Gerar PDF</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal: fluxo da operação -->
 <div class="modal-overlay oculto" id="modal-fluxo">
@@ -1594,9 +1612,15 @@
   }
 
   // ─── PDF de impressão ────────────────────────────────────────
-  function gerarPDF() {
+  // modo: "basico" (ID + conteúdo) ou "tudo" (todas as colunas)
+  function gerarPDF(modo) {
     var ids = Object.keys(selecionados);
     if (ids.length === 0) { toast("Selecione ao menos um pacote ou gaiola."); return; }
+
+    var tudo = (modo === "tudo");
+    var colValor  = tudo && comValores;
+    var colTempo  = tudo && houveHistorico;
+    var colPP     = tudo; // parada e ponto
 
     // agrupa os selecionados por rota
     var grupos = agrupar();
@@ -1614,10 +1638,11 @@
       var linhas = sel.map(function (i) {
         return "<tr>" +
           "<td>" + escapar(i.id) + "</td>" +
-          (comValores ? "<td>" + (i.valor || formatarBRL(i.valorNum)) + "</td>" : "") +
-          (comValores ? "<td>" + escapar(i.conteudo || "-") + "</td>" : "") +
-          "<td style='text-align:center'>" + escapar(i.parada || "-") + "</td>" +
-          "<td style='text-align:center'>" + escapar(i.ponto || "-") + "</td>" +
+          (colValor ? "<td>" + (i.valor || formatarBRL(i.valorNum)) + "</td>" : "") +
+          "<td>" + escapar(i.conteudo || "-") + "</td>" +
+          (colTempo ? "<td style='text-align:center'>" + formatarMinutos(i.minutos) + "</td>" : "") +
+          (colPP ? "<td style='text-align:center'>" + escapar(i.parada || "-") + "</td>" : "") +
+          (colPP ? "<td style='text-align:center'>" + escapar(i.ponto || "-") + "</td>" : "") +
           "<td style='text-align:center'>&#9744;</td>" +
         "</tr>";
       }).join("");
@@ -1628,9 +1653,11 @@
           "<table>" +
             "<thead><tr>" +
               "<th>ID do pacote</th>" +
-              (comValores ? "<th>Valor</th>" : "") +
-              (comValores ? "<th>Conteúdo</th>" : "") +
-              "<th>Parada</th><th>Ponto</th><th>Achado</th>" +
+              (colValor ? "<th>Valor</th>" : "") +
+              "<th>Conteúdo</th>" +
+              (colTempo ? "<th>Tempo parado</th>" : "") +
+              (colPP ? "<th>Parada</th><th>Ponto</th>" : "") +
+              "<th>Achado</th>" +
             "</tr></thead><tbody>" + linhas + "</tbody>" +
           "</table>" +
         "</div>";
@@ -1750,7 +1777,17 @@
     $("#btn-reiniciar").addEventListener("click", reiniciar);
     $("#btn-sel-todos").addEventListener("click", function () { selecionarTudo(true); });
     $("#btn-sel-limpar").addEventListener("click", function () { selecionarTudo(false); });
-    $("#btn-pdf").addEventListener("click", gerarPDF);
+    $("#btn-pdf").addEventListener("click", function () {
+      if (Object.keys(selecionados).length === 0) { toast("Selecione ao menos um pacote ou gaiola."); return; }
+      $("#modal-pdf").classList.remove("oculto");
+    });
+    $("#pdf-cancelar").addEventListener("click", function () { $("#modal-pdf").classList.add("oculto"); });
+    $("#pdf-confirmar").addEventListener("click", function () {
+      var sel = document.querySelector('input[name="pdf-cols"]:checked');
+      var modo = sel ? sel.value : "basico";
+      $("#modal-pdf").classList.add("oculto");
+      gerarPDF(modo);
+    });
 
     // Verificar agora: reabre o seletor de faltantes sem zerar o contador
     $("#btn-verificar").addEventListener("click", function () {
