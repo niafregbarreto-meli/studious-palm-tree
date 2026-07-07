@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bingo Hora a Hora — SSC2</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header id="app-header">
+    <div class="header-left">
+      <h1>🎯 Bingo Hora a Hora</h1>
+      <span class="site-badge">SSC2</span>
+    </div>
+    <div class="header-right">
+      <div id="summary-bar">
+        <span class="summary-item">
+          <strong id="total-count">—</strong> pacotes
+        </span>
+        <span class="summary-item">
+          <strong id="total-value">—</strong> em risco
+        </span>
+        <span class="summary-item routes-count">
+          <strong id="total-routes">—</strong> rotas
+        </span>
+      </div>
+      <div id="refresh-controls">
+        <span id="last-refresh-label">Atualizado: <strong id="last-refresh">—</strong></span>
+        <span id="countdown-label">Próximo: <strong id="countdown">30:00</strong></span>
+        <button id="btn-refresh" title="Atualizar agora">↻ Atualizar</button>
+      </div>
+    </div>
+  </header>
+
+  <div id="loading-overlay" hidden>
+    <div class="spinner"></div>
+    <p>Consultando BigQuery…</p>
+  </div>
+
+  <div id="error-toast" hidden></div>
+
+  <main id="route-container">
+    <div id="empty-state" hidden>
+      <p>✅ Nenhum pacote em BINGO no momento.</p>
+    </div>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="api.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
