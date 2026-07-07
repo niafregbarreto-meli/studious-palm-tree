@@ -877,6 +877,20 @@
       f.desde = primeira;
       f.minutos = Math.max(0, Math.round((agora - primeira) / 60000));
     });
+
+    // valores lidos da planilha pelo backend (id -> {v, c})
+    if (st.valores && Object.keys(st.valores).length) {
+      valores = {};
+      Object.keys(st.valores).forEach(function (id) {
+        var o = st.valores[id] || {};
+        valores[id] = {
+          valor: o.v || "",
+          valorNum: moedaParaNumero(o.v || ""),
+          conteudo: o.c || ""
+        };
+      });
+      comValores = true;
+    }
   }
 
   // Cruza os faltantes atuais com o histórico local:
@@ -1062,6 +1076,14 @@
 
     gerarConsulta();
     marcarEtapa(1, "concluida");
+
+    // Se o backend já trouxe os valores, pula direto para o resultado.
+    if (comValores) {
+      marcarEtapa(2, "concluida");
+      marcarEtapa(3, "concluida");
+      renderizar();
+      return;
+    }
 
     // Se houver planilha de valores publicada, busca automaticamente;
     // caso contrário, mostra o fluxo manual (etapas 2 e 3).

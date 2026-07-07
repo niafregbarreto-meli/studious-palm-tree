@@ -81,8 +81,52 @@ function sincronizar_(body) {
     auditorias: lerAuditorias_(),
     resolvidos: resolvidos,
     houveHistorico: houveHistorico,
-    novos: novos
+    novos: novos,
+    valores: lerValoresExtract_(ids)   // valor+conteúdo lidos da aba de Extração
   };
+}
+
+/**
+ * Lê a aba materializada da consulta (Extração) e devolve os valores dos IDs
+ * pedidos: { id: { v: "R$ ...", c: "descrição" } }.
+ * Encontra a aba automaticamente pela coluna SHP_SHIPMENT_ID no cabeçalho,
+ * ignorando as abas de controle e a página conectada.
+ */
+function lerValoresExtract_(ids) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ss.getSheets();
+  var quer = {};
+  (ids || []).forEach(function (id) { quer[String(id)] = true; });
+
+  for (var s = 0; s < sheets.length; s++) {
+    var sh = sheets[s];
+    var nome = sh.getName();
+    if (nome === "SEEN" || nome === "ENCONTRADOS" || nome === "AUDITORIAS") continue;
+
+    var rng;
+    try { rng = sh.getDataRange().getValues(); } catch (e) { continue; }
+    if (!rng || rng.length < 2) continue;
+
+    var cab = rng[0].map(function (c) { return String(c).toUpperCase().trim(); });
+    var iId = cab.indexOf("SHP_SHIPMENT_ID");
+    if (iId < 0) continue; // não é a aba de valores
+
+    var iV = cab.indexOf("MOEDA_LOCAL");
+    var iC = cab.indexOf("SHP_ITEM_DESC");
+    var mapa = {};
+    for (var i = 1; i < rng.length; i++) {
+      var id = String(rng[i][iId]).trim();
+      if (!id) continue;
+      if (quer[id]) {
+        mapa[id] = {
+          v: iV >= 0 ? String(rng[i][iV]) : "",
+          c: iC >= 0 ? String(rng[i][iC]) : ""
+        };
+      }
+    }
+    return mapa;
+  }
+  return {};
 }
 
 function marcarEncontrado_(body) {
