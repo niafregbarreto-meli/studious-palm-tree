@@ -20,28 +20,19 @@ function fmtMinutos(min) {
   return h > 0 ? `${h}h ${m}min` : `${m}min`;
 }
 
-// Converte "AM1_1" → "A1", "PM1_2" → "P2", "SD_3" → "S3"
-function simplifyRota(rotapl) {
-  if (!rotapl || rotapl === 'SEM_ROTA') return rotapl;
-  // Pega a letra inicial do ciclo + número após o último underscore
-  const parts = rotapl.split('_');
-  const letra = parts[0][0]; // A, P, S
-  const num   = parts[parts.length - 1];
-  return `${letra}${num}`;
-}
+// ROTA já vem simplificada da query (A1, B3...) — nenhuma transformação necessária
 
 // ── Agrupamento ──────────────────────────────────────────────────────────────
 
 function groupByRota(rows) {
   const map = new Map();
   for (const row of rows) {
-    const key = row.ROTAPL;
+    const key = row.ROTA || 'SEM_ROTA';
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(row);
   }
-  // Ordena por valor desc dentro de cada grupo (a SQL já faz isso, mas garante client-side)
   for (const [, list] of map) {
-    list.sort((a, b) => parseFloat((b.VALOR_NUM || 0)) - parseFloat((a.VALOR_NUM || 0)));
+    list.sort((a, b) => parseFloat(b.VALOR_NUM || 0) - parseFloat(a.VALOR_NUM || 0));
   }
   return map;
 }
@@ -69,7 +60,8 @@ function createRouteSection(rotapl, rows) {
   const totalVal = rows.reduce((s, r) => s + parseFloat((r.VALOR_NUM || 0)), 0);
   const maxMin   = Math.max(...rows.map(r => parseInt(r.minutos_parado, 10)));
   const hasCrit  = maxMin >= CONFIG.criticalThresholdMin;
-  const simple   = simplifyRota(rotapl);
+  // ROTA já é o nome simplificado (A1, B3...), ROTACOMPLETA é o nome completo
+  const rotaFull = rows[0]?.ROTACOMPLETA || rotapl;
 
   const section = document.createElement('section');
   section.className = `route-card${hasCrit ? ' has-critical' : ''}`;
@@ -81,8 +73,8 @@ function createRouteSection(rotapl, rows) {
   header.setAttribute('aria-expanded', 'true');
   header.innerHTML = `
     <span class="route-label">
-      <span class="route-simple">${simple}</span>
-      <span class="route-full">${rotapl}</span>
+      <span class="route-simple">${rotapl}</span>
+      <span class="route-full">${rotaFull}</span>
     </span>
     <span class="route-stats">
       <span class="stat-count">${rows.length} pacote${rows.length !== 1 ? 's' : ''}</span>
