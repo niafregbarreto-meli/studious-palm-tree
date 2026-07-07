@@ -1310,7 +1310,7 @@
 "    SHI.SHP_SHIPMENT_ID,\n" +
 "    CONCAT(\"R$ \", REPLACE(FORMAT(\"%.2f\", SHI.SHP_ORDER_COST), \".\", \",\")) AS MOEDA_LOCAL,\n" +
 "    ITENS.SHP_ITEM_DESC,\n" +
-"    FORMAT_DATETIME('%Y-%m-%dT%H:%M:%S-03:00', ENTRADA.ENTROU_STATION) AS ENTROU_STATION\n" +
+"    FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S%Ez', TIMESTAMP(ENTRADA.ENTROU_STATION, 'America/Sao_Paulo'), 'America/Sao_Paulo') AS ENTROU_STATION\n" +
 "FROM `meli-bi-data.WHOWNER.BT_SHP_SHIPMENTS` SHI\n" +
 "LEFT JOIN (\n" +
 "    SELECT\n" +
