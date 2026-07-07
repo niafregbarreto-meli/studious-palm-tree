@@ -378,6 +378,8 @@
   table.pacotes tbody tr:last-child td { border-bottom: none; }
   table.pacotes tbody tr:hover { background: #FAFBFF; }
   .col-id { font-family: "SF Mono", Menlo, Consolas, monospace; white-space: nowrap; }
+  .col-id a { color: var(--ml-blue); text-decoration: none; }
+  .col-id a:hover { text-decoration: underline; }
   .col-valor { white-space: nowrap; font-weight: 700; text-align: right; }
   .col-conteudo { max-width: 380px; }
   .col-ponto, .col-parada, .col-tempo, .col-desde { text-align: center; white-space: nowrap; }
@@ -1568,7 +1570,7 @@
       var marcado = selecionados[i.id] ? " checked" : "";
       return '<tr class="' + classe.trim() + '" data-min="' + i.minutos + '" data-busca="' + escapar((i.id + " " + rota + " " + i.conteudo).toLowerCase()) + '">' +
         '<td class="col-sel"><input type="checkbox" class="sel-row" data-id="' + escapar(i.id) + '"' + marcado + '></td>' +
-        '<td class="col-id">' + escapar(i.id) + '</td>' +
+        '<td class="col-id"><a href="https://envios.adminml.com/logistics/package-management/package/' + encodeURIComponent(i.id) + '" target="_blank" rel="noopener">' + escapar(i.id) + '</a></td>' +
         valorCel +
         conteudoCel +
         tempoCel +
