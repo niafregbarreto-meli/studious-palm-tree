@@ -970,20 +970,27 @@
     return isNaN(ms) ? 0 : ms;
   }
 
-  // Se os valores trouxeram horário de entrada, usa-o como tempo (global).
+  // Se os valores trouxeram horário de entrada, o tempo passa a ser GLOBAL e
+  // AUTORITATIVO (igual para todos). Não mistura com o histórico local.
   function aplicarTempoGlobal() {
+    var temAlgum = faltantes.some(function (f) {
+      var v = valores[f.id]; return v && v.entrou;
+    });
+    if (!temAlgum) return; // CSV sem coluna de tempo -> mantém histórico local
+    tempoGlobal = true;
     var agora = Date.now();
-    var algum = false;
     faltantes.forEach(function (f) {
       var v = valores[f.id];
       if (v && v.entrou) {
         f.desde = v.entrou;
         f.minutos = Math.max(0, Math.round((agora - v.entrou) / 60000));
         f.novo = false;
-        algum = true;
+        f.semTempo = false;
+      } else {
+        // sem horário para este ID -> tempo desconhecido (não usa o local)
+        f.desde = 0; f.minutos = 0; f.novo = false; f.semTempo = true;
       }
     });
-    if (algum) tempoGlobal = true;
   }
 
   // ─── Histórico persistente (localStorage) ────────────────────
@@ -1063,13 +1070,17 @@
       if (!idsAtuais[id]) resolvidos++;
     });
 
+    var LIMITE_MS = 18 * 60 * 60 * 1000; // descarta registros stale (troca de dia)
     var novoSeen = {};
     faltantes.forEach(function (f) {
       var primeira = hist.seen[f.id];
+      // ignora first-seen absurdamente antigo (lixo de dias anteriores)
+      if (primeira !== undefined && (agora - primeira) > LIMITE_MS) primeira = undefined;
       f.novo = (primeira === undefined);
       if (f.novo) primeira = agora;
       f.desde = primeira;
       f.minutos = Math.max(0, Math.round((agora - primeira) / 60000));
+      f.semTempo = false;
       novoSeen[f.id] = primeira; // preserva o first-seen; os que sairam são descartados
     });
 
@@ -1300,7 +1311,7 @@
 "        MIN(SHP_LG_CC_DATE_CREATED) AS ENTROU_STATION\n" +
 "    FROM `meli-bi-data.WHOWNER.LK_SHP_LG_SORTING_HISTORY`\n" +
 "    WHERE SHP_LG_CC_ACTION_TYPE = 'add sortable unit'\n" +
-"      AND SHP_LG_CC_DATE_CREATED >= DATETIME_SUB(CURRENT_DATETIME('America/Sao_Paulo'), INTERVAL 2 DAY)\n" +
+"      AND SHP_LG_CC_DATE_CREATED >= DATETIME(CURRENT_DATE('America/Sao_Paulo'))\n" +
 "    GROUP BY 1\n" +
 ") ENTRADA ON ENTRADA.PCT = SHI.SHP_SHIPMENT_ID\n" +
 "WHERE SHI.SHP_SHIPMENT_ID IN (\n    " + listaIds + "\n);";
@@ -1377,7 +1388,8 @@
         conteudo: v.conteudo || "",
         minutos: f.minutos || 0,
         desde: f.desde || 0,
-        novo: !!f.novo
+        novo: !!f.novo,
+        semTempo: !!f.semTempo
       };
       // chave = rota + ciclo (evita misturar A1_PM1 com A1_AM1)
       var chave = f.rotaCompleta && f.rotaCompleta.length ? f.rotaCompleta : "SEM ROTA";
@@ -1416,7 +1428,7 @@
     var resumoHtml =
       kpi("alerta", totalPacotes, "Pacotes na estação") +
       kpi("rotas", rotas.length, "Rotas afetadas");
-    if (houveHistorico) {
+    if (houveHistorico && !tempoGlobal) {
       resumoHtml += kpi("persist", persistentes, "Persistem da carga anterior");
       resumoHtml += kpi("novos", novos, "Novos nesta carga");
       resumoHtml += kpi("resolvidos", resolvidos, "Resolvidos desde a última");
@@ -1561,11 +1573,11 @@
                  : i.minutos >= 30 ? "linha-atencao" : "";
       var achado = !!encontrados[i.id];
       if (achado) classe += " encontrado";
+      var tempoConteudo = i.semTempo ? '<span class="sem-dado">—</span>'
+                        : (i.novo ? '<span class="tag-novo">Novo</span>' : formatarMinutos(i.minutos));
       var tempoCel = mostrarTempoCol
-        ? '<td class="col-tempo">' +
-            (i.novo ? '<span class="tag-novo">Novo</span>' : formatarMinutos(i.minutos)) +
-          '</td>' +
-          '<td class="col-desde">' + formatarHora(i.desde) + '</td>'
+        ? '<td class="col-tempo">' + tempoConteudo + '</td>' +
+          '<td class="col-desde">' + (i.semTempo ? "—" : formatarHora(i.desde)) + '</td>'
         : "";
       var marcado = selecionados[i.id] ? " checked" : "";
       return '<tr class="' + classe.trim() + '" data-min="' + i.minutos + '" data-busca="' + escapar((i.id + " " + rota + " " + i.conteudo).toLowerCase()) + '">' +
