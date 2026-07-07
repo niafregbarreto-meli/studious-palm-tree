@@ -39,9 +39,41 @@ mostra:
 - **Tempo parado** — há quanto tempo cada pacote está na estação; linhas com
   mais de 60 minutos são destacadas em vermelho.
 
-O histórico é por navegador/máquina. Para monitoramento em um único posto, é
-suficiente e não exige infraestrutura. Use **Reiniciar** para limpar a tela
-sem apagar o histórico.
+O histórico é por navegador/máquina por padrão. Para monitoramento em um único
+posto, é suficiente e não exige infraestrutura. Use **Reiniciar** para limpar a
+tela sem apagar o histórico.
+
+### Histórico compartilhado entre várias máquinas (opcional)
+
+Para que várias pessoas vejam o mesmo estado (tempo na estação, pacotes
+encontrados e gaiolas auditadas) em tempo quase real, use o backend em
+`apps-script/Codigo.gs`:
+
+1. Crie uma planilha Google nova.
+2. Menu **Extensões → Apps Script** e cole o conteúdo de `apps-script/Codigo.gs`.
+3. **Implantar → Nova implantação → Tipo: App da Web**. Execute como *você
+   mesmo* e conceda acesso a *qualquer pessoa da organização* (ou conforme a
+   política interna).
+4. Copie a URL que termina em `/exec`.
+5. No `index.html`, preencha a constante `URL_BACKEND` com essa URL.
+
+Com o backend ativo, cada carga de faltantes sincroniza o histórico com a
+planilha, e as marcações de "Encontrado"/"Auditada" são propagadas para todas
+as máquinas (atualização automática a cada 60 s). Se o backend ficar
+indisponível, a ferramenta volta ao histórico local automaticamente.
+
+## Marcações e impressão
+
+- **Encontrado**: cada pacote tem um botão para marcar que já foi localizado
+  fisicamente; a linha fica riscada e o estado é salvo.
+- **Auditada por**: cada gaiola (rota) tem um campo para registrar o rep que a
+  auditou, com data e hora.
+- **Seleção + PDF**: selecione pacotes individuais ou gaiolas inteiras e clique
+  em **Gerar PDF de impressão** para ter em papel a lista do que buscar, com um
+  campo de conferência por item.
+- **Verificar agora**: força a próxima verificação (recarregar os faltantes)
+  sem esperar o contador, que continua correndo e sobrevive ao recarregar a
+  página.
 
 ## Busca automática de valores (opcional)
 

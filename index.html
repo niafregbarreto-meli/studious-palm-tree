@@ -669,9 +669,31 @@
 
   // ─── Configuração ────────────────────────────────────────────
   // Opcional: URL do CSV "Publicar na web" da planilha de valores
-  // (Q_BACKOFFICE conectada ao BigQuery). Se preenchida, os valores são
+  // (planilha conectada ao BigQuery). Se preenchida, os valores são
   // buscados automaticamente e o usuário só precisa carregar os faltantes.
   var URL_VALORES_CSV = "";
+
+  // Opcional: URL do Web App do Google Apps Script (/exec) para histórico
+  // COMPARTILHADO entre várias máquinas. Se vazia, usa apenas o navegador.
+  var URL_BACKEND = "";
+
+  // ─── Backend compartilhado (Apps Script) ─────────────────────
+  function backendPost(payload) {
+    // text/plain evita o preflight CORS do Apps Script
+    return fetch(URL_BACKEND, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    }).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
+  }
+  function backendGet(params) {
+    var qs = new URLSearchParams(params).toString();
+    return fetch(URL_BACKEND + "?" + qs, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+  }
 
   // ─── Estado ──────────────────────────────────────────────────
   var faltantes = [];   // linhas "Na estação"
@@ -823,10 +845,44 @@
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(h)); } catch (e) { /* quota */ }
   }
 
-  // Cruza os faltantes atuais com o histórico:
+  // Prepara o histórico (remoto se houver backend, senão local) e chama cb().
+  function prepararHistorico(cb) {
+    if (URL_BACKEND) {
+      var ids = faltantes.map(function (f) { return f.id; });
+      backendPost({ action: "sync", ids: ids, ts: Date.now() })
+        .then(function (st) { aplicarEstadoRemoto(st); cb(); })
+        .catch(function () {
+          toast("Sem conexão com o histórico compartilhado. Usando o local.");
+          aplicarHistoricoLocal(); cb();
+        });
+    } else {
+      aplicarHistoricoLocal(); cb();
+    }
+  }
+
+  // Aplica o estado devolvido pelo backend compartilhado.
+  function aplicarEstadoRemoto(st) {
+    st = st || {};
+    houveHistorico = !!st.houveHistorico;
+    resolvidos     = st.resolvidos || 0;
+    encontrados    = st.encontrados || {};
+    auditorias     = st.auditorias || {};
+    var seen  = st.seen || {};
+    var novos = {};
+    (st.novos || []).forEach(function (id) { novos[id] = true; });
+    var agora = Date.now();
+    faltantes.forEach(function (f) {
+      var primeira = seen[f.id] || agora;
+      f.novo = !!novos[f.id];
+      f.desde = primeira;
+      f.minutos = Math.max(0, Math.round((agora - primeira) / 60000));
+    });
+  }
+
+  // Cruza os faltantes atuais com o histórico local:
   // - calcula há quanto tempo cada pacote está "Na estação" (primeira leitura)
   // - marca os novos e conta os que já sairam (resolvidos)
-  function aplicarHistorico() {
+  function aplicarHistoricoLocal() {
     var agora = Date.now();
     var hist = carregarHistorico();
     houveHistorico = hist.ultimaCarga > 0;
@@ -992,9 +1048,11 @@
       return;
     }
 
-    // cruza com o histórico local (tempo na estação, novos, resolvidos)
-    aplicarHistorico();
+    // cruza com o histórico (remoto ou local) e então continua
+    prepararHistorico(aposHistorico);
+  }
 
+  function aposHistorico() {
     // marca dropzone como ok
     var dz = $("#dz-faltantes");
     dz.classList.add("ok");
@@ -1182,6 +1240,7 @@
     // esconde o banner de lembrete (recém-atualizado) e reinicia o contador
     $("#banner-lembrete").classList.add("oculto");
     iniciarLembrete();
+    iniciarPoll();
 
     $("#card-4").scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -1343,8 +1402,9 @@
   function alternarEncontrado(id, btn) {
     if (encontrados[id]) { delete encontrados[id]; }
     else { encontrados[id] = Date.now(); }
-    gravarJSON(KEY_ENCONTRADOS, encontrados);
     var achado = !!encontrados[id];
+    gravarJSON(KEY_ENCONTRADOS, encontrados);
+    if (URL_BACKEND) backendPost({ action: "encontrado", id: id, marcado: achado }).catch(function () {});
     btn.classList.toggle("ativo", achado);
     btn.textContent = achado ? "Encontrado" : "Marcar";
     var tr = btn.closest("tr");
@@ -1357,6 +1417,7 @@
     if (!rep) return;
     auditorias[rota] = { rep: rep, ts: Date.now() };
     gravarJSON(KEY_AUDITORIAS, auditorias);
+    if (URL_BACKEND) backendPost({ action: "auditoria", rota: rota, rep: rep }).catch(function () {});
     var span = input.closest(".auditoria");
     if (span) {
       span.classList.add("feita");
@@ -1367,6 +1428,41 @@
 
   function atualizarSelecaoInfo() {
     $("#qtd-selecionados").textContent = Object.keys(selecionados).length;
+  }
+
+  // ─── Sincronização com o backend (outras máquinas) ───────────
+  var pollTimer = null;
+  function iniciarPoll() {
+    if (!URL_BACKEND) return;
+    pararPoll();
+    pollTimer = setInterval(function () {
+      backendGet({ action: "state" }).then(function (st) {
+        encontrados = st.encontrados || {};
+        auditorias  = st.auditorias || {};
+        atualizarMarcasDOM();
+      }).catch(function () {});
+    }, 60000);
+  }
+  function pararPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+  // Atualiza os marcadores de "encontrado" e "auditada" sem recriar a lista
+  function atualizarMarcasDOM() {
+    $all(".btn-encontrado").forEach(function (btn) {
+      var id = btn.getAttribute("data-id");
+      var achado = !!encontrados[id];
+      btn.classList.toggle("ativo", achado);
+      btn.textContent = achado ? "Encontrado" : "Marcar";
+      var tr = btn.closest("tr");
+      if (tr) tr.classList.toggle("encontrado", achado);
+    });
+    $all(".auditoria").forEach(function (span) {
+      var rota = span.getAttribute("data-rota");
+      var aud = auditorias[rota];
+      if (aud && !span.classList.contains("feita")) {
+        span.classList.add("feita");
+        span.innerHTML = "Auditada por " + escapar(aud.rep) + " às " + formatarHora(aud.ts);
+      }
+    });
   }
 
   // ─── Busca ───────────────────────────────────────────────────
@@ -1501,6 +1597,7 @@
   // ─── Reiniciar ───────────────────────────────────────────────
   function reiniciar() {
     if (!window.confirm("Reiniciar vai limpar a tela atual. Deseja continuar?")) return;
+    pararPoll();
     faltantes = []; valores = {}; comValores = false;
     selecionados = {};
     resolvidos = 0; houveHistorico = false;
