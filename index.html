@@ -269,6 +269,18 @@
     font-family: inherit;
   }
   .busca:focus { outline: none; border-color: var(--ml-blue); }
+  .filtro {
+    flex: 0 0 auto;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: inherit;
+    background: #fff;
+    cursor: pointer;
+  }
+  .filtro:focus { outline: none; border-color: var(--ml-blue); }
+  .filtro.ativo { border-color: var(--ml-orange); background: #FFF8E8; font-weight: 600; }
 
   /* ─── Cartão de rota ───────────────────────────────────────── */
   .rota-cartao {
@@ -621,6 +633,12 @@
 
     <div class="ferramentas">
       <input type="text" class="busca" id="busca" placeholder="Buscar por ID, rota ou conteúdo..." />
+      <select class="filtro" id="filtro-tempo" title="Filtrar por tempo parado na estação">
+        <option value="0">Tempo parado: todos</option>
+        <option value="30">Parados +30 min</option>
+        <option value="60">Parados +1 hora</option>
+        <option value="120">Parados +2 horas</option>
+      </select>
       <button class="btn btn-secundario" id="btn-expandir">Expandir tudo</button>
       <button class="btn btn-secundario" id="btn-recolher">Recolher tudo</button>
       <button class="btn btn-neutro" id="btn-exportar">Exportar CSV</button>
@@ -629,6 +647,7 @@
 
     <div class="ferramentas">
       <span class="selecao-info">Selecionados: <strong id="qtd-selecionados">0</strong></span>
+      <button class="btn btn-secundario" id="btn-sel-visiveis">Selecionar filtrados</button>
       <button class="btn btn-secundario" id="btn-sel-todos">Selecionar tudo</button>
       <button class="btn btn-secundario" id="btn-sel-limpar">Limpar seleção</button>
       <button class="btn btn-primario" id="btn-pdf">Gerar PDF de impressão</button>
@@ -1258,6 +1277,7 @@
     }
     $("#lista-rotas").innerHTML = html;
     atualizarSelecaoInfo();
+    aplicarFiltros();
 
     // esconde o banner de lembrete (recém-atualizado) e reinicia o contador
     $("#banner-lembrete").classList.add("oculto");
@@ -1303,7 +1323,7 @@
           '<td class="col-desde">' + formatarHora(i.desde) + '</td>'
         : "";
       var marcado = selecionados[i.id] ? " checked" : "";
-      return '<tr class="' + classe.trim() + '" data-busca="' + escapar((i.id + " " + rota + " " + i.conteudo).toLowerCase()) + '">' +
+      return '<tr class="' + classe.trim() + '" data-min="' + i.minutos + '" data-busca="' + escapar((i.id + " " + rota + " " + i.conteudo).toLowerCase()) + '">' +
         '<td class="col-sel"><input type="checkbox" class="sel-row" data-id="' + escapar(i.id) + '"' + marcado + '></td>' +
         '<td class="col-id">' + escapar(i.id) + '</td>' +
         valorCel +
@@ -1487,21 +1507,48 @@
     });
   }
 
-  // ─── Busca ───────────────────────────────────────────────────
-  function filtrarBusca(termo) {
-    termo = normalizar(termo);
+  // ─── Filtros (busca + tempo parado) ──────────────────────────
+  var termoBusca = "";
+  var filtroMin  = 0;
+
+  function aplicarFiltros() {
+    var termo = normalizar(termoBusca);
     $all(".rota-cartao").forEach(function (card) {
-      var visiveisNaRota = 0;
-      $all(".pacotes tbody tr", card).forEach(function (tr) {
-        var match = !termo || tr.getAttribute("data-busca").indexOf(termo) !== -1;
-        tr.style.display = match ? "" : "none";
-        if (match) visiveisNaRota++;
+      var visiveis = 0;
+      Array.prototype.slice.call(card.querySelectorAll(".pacotes tbody tr")).forEach(function (tr) {
+        var okBusca = !termo || tr.getAttribute("data-busca").indexOf(termo) !== -1;
+        var min = parseInt(tr.getAttribute("data-min") || "0", 10);
+        var okTempo = min >= filtroMin;
+        var mostrar = okBusca && okTempo;
+        tr.style.display = mostrar ? "" : "none";
+        if (mostrar) visiveis++;
       });
-      card.style.display = visiveisNaRota > 0 ? "" : "none";
+      card.style.display = visiveis > 0 ? "" : "none";
     });
+    var sel = $("#filtro-tempo");
+    if (sel) sel.classList.toggle("ativo", filtroMin > 0);
   }
-  // permite buscar dentro de subconjuntos das linhas
-  function _all_qs(sel, ctx) { return Array.prototype.slice.call((ctx || document).querySelectorAll(sel)); }
+
+  // Seleciona todos os pacotes atualmente visíveis (após filtro/busca)
+  function selecionarVisiveis() {
+    var qtd = 0;
+    $all(".rota-cartao").forEach(function (card) {
+      if (card.style.display === "none") return;
+      Array.prototype.slice.call(card.querySelectorAll(".pacotes tbody tr")).forEach(function (tr) {
+        if (tr.style.display === "none") return;
+        var chk = tr.querySelector(".sel-row");
+        if (chk) {
+          chk.checked = true;
+          selecionados[chk.getAttribute("data-id")] = true;
+          qtd++;
+        }
+      });
+      var selRota = card.querySelector(".sel-rota");
+      if (selRota) selRota.checked = true;
+    });
+    atualizarSelecaoInfo();
+    toast(qtd + " pacote(s) filtrado(s) selecionado(s).");
+  }
 
   // ─── Exportar CSV ────────────────────────────────────────────
   function exportarCSV() {
@@ -1638,6 +1685,9 @@
     $("#file-faltantes").value = "";
     $("#file-valores").value = "";
     $("#busca").value = "";
+    termoBusca = ""; filtroMin = 0;
+    $("#filtro-tempo").value = "0";
+    $("#filtro-tempo").classList.remove("ativo");
     marcarEtapa(1, "ativa");
     marcarEtapa(2, ""); marcarEtapa(3, ""); marcarEtapa(4, "");
     $("#topo").scrollIntoView({ behavior: "smooth" });
@@ -1687,7 +1737,9 @@
       pularValores();
     });
 
-    $("#busca").addEventListener("input", function () { filtrarBusca(this.value); });
+    $("#busca").addEventListener("input", function () { termoBusca = this.value; aplicarFiltros(); });
+    $("#filtro-tempo").addEventListener("change", function () { filtroMin = parseInt(this.value, 10) || 0; aplicarFiltros(); });
+    $("#btn-sel-visiveis").addEventListener("click", selecionarVisiveis);
     $("#btn-expandir").addEventListener("click", function () {
       $all(".rota-cartao").forEach(function (c) { c.classList.remove("recolhido"); });
     });
