@@ -85,6 +85,16 @@
     margin-left: 4px;
   }
   .lembrete-topo strong { color: #2D3277; }
+  .relogio {
+    font-size: 12px;
+    font-weight: 600;
+    color: #2D3277;
+    background: rgba(255,255,255,.6);
+    padding: 4px 12px;
+    border-radius: 20px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
   .btn-topo {
     background: #2D3277;
     color: #fff;
@@ -564,6 +574,7 @@
       </div>
     </div>
     <div class="contexto">
+      <span class="relogio" id="relogio" title="Horário de referência — São Paulo">São Paulo · --/-- --:--:--</span>
       <span class="badge-site">MLB</span>
       <span class="badge-site sc">SSC2</span>
       <span class="lembrete-topo oculto" id="lembrete-topo">
@@ -956,16 +967,20 @@
     return h + "h" + (m > 0 ? " " + m + "min" : "");
   }
 
+  // Sempre exibe a hora no fuso de São Paulo, independente do relógio da máquina
   function formatarHora(ts) {
     if (!ts) return "—";
-    var d = new Date(ts);
-    return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
+    return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hour12: false
+    }).format(new Date(ts));
   }
 
-  // Converte "2026-07-07 09:12:00" ou ISO em epoch ms (0 se inválido)
+  // Converte o horário em epoch ms absoluto. Se não trouxer fuso, assume
+  // São Paulo (-03:00), para que o tempo seja igual em qualquer máquina.
   function parseDataHora(txt) {
     if (!txt) return 0;
     var s = txt.toString().trim().replace(" ", "T");
+    if (!/([+\-]\d{2}:?\d{2}|Z)$/.test(s)) s += "-03:00";
     var ms = Date.parse(s);
     return isNaN(ms) ? 0 : ms;
   }
@@ -1295,7 +1310,7 @@
 "    SHI.SHP_SHIPMENT_ID,\n" +
 "    CONCAT(\"R$ \", REPLACE(FORMAT(\"%.2f\", SHI.SHP_ORDER_COST), \".\", \",\")) AS MOEDA_LOCAL,\n" +
 "    ITENS.SHP_ITEM_DESC,\n" +
-"    FORMAT_DATETIME('%Y-%m-%d %H:%M:%S', ENTRADA.ENTROU_STATION) AS ENTROU_STATION\n" +
+"    FORMAT_DATETIME('%Y-%m-%dT%H:%M:%S-03:00', ENTRADA.ENTROU_STATION) AS ENTROU_STATION\n" +
 "FROM `meli-bi-data.WHOWNER.BT_SHP_SHIPMENTS` SHI\n" +
 "LEFT JOIN (\n" +
 "    SELECT\n" +
@@ -2057,6 +2072,17 @@
     $("#fechar-lembrete").addEventListener("click", function () {
       $("#banner-lembrete").classList.add("oculto");
     });
+
+    // relógio de referência (São Paulo)
+    var relogio = $("#relogio");
+    function tickRelogio() {
+      var d = new Date();
+      var data = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" }).format(d);
+      var hora = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(d);
+      relogio.textContent = "São Paulo · " + data + " " + hora;
+    }
+    tickRelogio();
+    setInterval(tickRelogio, 1000);
 
     // carrega estado persistido e configura interações
     encontrados = lerJSON(KEY_ENCONTRADOS, {});
