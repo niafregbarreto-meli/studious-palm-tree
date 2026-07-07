@@ -485,6 +485,12 @@
   .modal h3 { font-size: 18px; font-weight: 700; color: #2D3277; margin-bottom: 8px; }
   .modal p { font-size: 13.5px; color: var(--text-soft); margin-bottom: 22px; }
   .modal-acoes { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .modal-ajuda { max-width: 580px; text-align: left; }
+  .ajuda-conteudo { font-size: 13.5px; color: var(--text-soft); margin-bottom: 20px; }
+  .ajuda-conteudo ol { padding-left: 20px; margin-bottom: 12px; }
+  .ajuda-conteudo li { margin-bottom: 8px; }
+  .ajuda-conteudo a { color: var(--ml-blue); font-weight: 600; text-decoration: none; }
+  .ajuda-conteudo a:hover { text-decoration: underline; }
   .opcoes-pdf { text-align: left; display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
   .opcoes-pdf label { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
 
@@ -556,7 +562,6 @@
            onerror="this.style.display='none'" />
       <div class="marca">
         <h1>Bingo Hora a Hora</h1>
-        <span class="subtitulo">Monitoramento de pacotes na estação sem atrelamento</span>
       </div>
     </div>
     <div class="contexto">
@@ -566,6 +571,7 @@
         Próxima verificação: <strong id="lembrete-tempo">30:00</strong>
       </span>
       <button class="btn-topo oculto" id="btn-verificar" title="Baixar os faltantes e verificar agora">Verificar agora</button>
+      <button class="btn-topo" id="btn-ajuda" title="Como usar">Ajuda</button>
     </div>
   </div>
 </header>
@@ -637,6 +643,7 @@
       </div>
       <div class="consulta-acoes">
         <button class="btn btn-primario" id="btn-copiar">Copiar consulta</button>
+        <a class="btn btn-secundario" id="btn-bq" href="https://console.cloud.google.com/bigquery?project=meli-bi-data&ws=!1m0" target="_blank" rel="noopener">Abrir o BigQuery</a>
         <span class="contagem-ids" id="contagem-ids"></span>
       </div>
     </div>
@@ -713,6 +720,32 @@
 <footer>
   Bingo Hora a Hora &middot; Ferramenta interna de monitoramento &middot; SSC2
 </footer>
+
+<!-- Modal: ajuda -->
+<div class="modal-overlay oculto" id="modal-ajuda">
+  <div class="modal modal-ajuda">
+    <h3>Como usar</h3>
+    <div class="ajuda-conteudo">
+      <ol>
+        <li>Baixe os faltantes em
+          <a href="https://envios.adminml.com/logistics/sorting/monitoring" target="_blank" rel="noopener">Separação &rarr; Baixar faltantes</a>,
+          do grupo e dia desejados.</li>
+        <li>Carregue o CSV na <strong>Etapa 1</strong>. A ferramenta filtra os pacotes com localização "Na estação".</li>
+        <li>Copie a consulta gerada e execute no
+          <a href="https://console.cloud.google.com/bigquery?project=meli-bi-data&ws=!1m0" target="_blank" rel="noopener">BigQuery (projeto meli-bi-data)</a>.
+          Baixe o resultado em CSV.</li>
+        <li>Carregue esse CSV na <strong>Etapa 3</strong> para trazer valor e conteúdo. Opcional: "analisar apenas por rota".</li>
+        <li>Analise: pacotes agrupados por letra e ciclo, ordenados pelo maior valor.</li>
+      </ol>
+      <p><strong>Recursos:</strong> marque pacotes como "Encontrado", registre a gaiola em "Auditada por",
+      filtre por tempo parado, selecione pacotes ou gaiolas e gere um PDF de impressão. O histórico compara
+      cada carga com a anterior para calcular o tempo parado na estação.</p>
+    </div>
+    <div class="modal-acoes">
+      <button class="btn btn-primario" id="ajuda-fechar">Entendi</button>
+    </div>
+  </div>
+</div>
 
 <!-- Modal: opções de impressão -->
 <div class="modal-overlay oculto" id="modal-pdf">
@@ -1953,6 +1986,10 @@
     $("#btn-verificar").addEventListener("click", function () {
       $("#file-faltantes").click();
     });
+
+    // Ajuda
+    $("#btn-ajuda").addEventListener("click", function () { $("#modal-ajuda").classList.remove("oculto"); });
+    $("#ajuda-fechar").addEventListener("click", function () { $("#modal-ajuda").classList.add("oculto"); });
 
     $all("[data-fluxo]").forEach(function (b) {
       b.addEventListener("click", function () {
