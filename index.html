@@ -282,6 +282,42 @@
   .filtro:focus { outline: none; border-color: var(--ml-blue); }
   .filtro.ativo { border-color: var(--ml-orange); background: #FFF8E8; font-weight: 600; }
 
+  /* ─── Destaques ────────────────────────────────────────────── */
+  .destaques {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .destaque-item {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 12px 16px;
+    border-left: 4px solid var(--ml-blue);
+  }
+  .d-lab { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--text-soft); margin-bottom: 4px; }
+  .d-val { font-size: 15px; font-weight: 700; color: var(--text); }
+
+  /* ─── Grupo por letra ──────────────────────────────────────── */
+  .letra-grupo { margin-bottom: 18px; }
+  .letra-cabeca {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 8px 6px;
+    cursor: pointer;
+    border-bottom: 2px solid var(--ml-yellow);
+    margin-bottom: 10px;
+    user-select: none;
+  }
+  .letra-nome { font-size: 22px; font-weight: 800; color: #2D3277; min-width: 30px; }
+  .letra-stats { font-size: 13px; color: var(--text-soft); }
+  .letra-stats strong { color: var(--text); }
+  .letra-cabeca .seta { margin-left: auto; color: var(--text-muted); font-size: 12px; transition: transform .2s; }
+  .letra-grupo.recolhido .letra-corpo { display: none; }
+  .letra-grupo.recolhido .letra-cabeca .seta { transform: rotate(-90deg); }
+
   /* ─── Cartão de rota ───────────────────────────────────────── */
   .rota-cartao {
     background: var(--surface);
@@ -632,6 +668,7 @@
     </div>
 
     <div class="resumo" id="resumo"></div>
+    <div class="destaques oculto" id="destaques"></div>
 
     <div class="ferramentas">
       <input type="text" class="busca" id="busca" placeholder="Buscar por ID, rota ou conteúdo..." />
@@ -1284,13 +1321,34 @@
     }
     $("#resumo").innerHTML = resumoHtml;
 
-    // Lista de rotas
+    // Destaques (estatísticas relevantes)
+    renderizarDestaques(rotas, grupos);
+
+    // Lista de rotas agrupadas por letra
     var html = "";
     if (rotas.length === 0) {
       html = '<div class="cartao"><div class="vazio">Nenhum pacote na estação para exibir.</div></div>';
     } else {
+      // agrupa as rotas pela letra inicial (A, B, C... / "Sem rota")
+      var letras = {};
       rotas.forEach(function (r) {
-        html += cartaoRota(r, grupos[r]);
+        var L = (r === "SEM ROTA") ? "Sem rota" : (r.match(/^[A-Za-z]+/) || ["?"])[0];
+        (letras[L] = letras[L] || []).push(r);
+      });
+      var chaves = Object.keys(letras).sort(function (a, b) {
+        if (a === "Sem rota") return 1;
+        if (b === "Sem rota") return -1;
+        return a.localeCompare(b);
+      });
+      chaves.forEach(function (L) {
+        var rotasL = letras[L];
+        var nPac = 0, val = 0;
+        rotasL.forEach(function (r) {
+          nPac += grupos[r].length;
+          grupos[r].forEach(function (i) { val += i.valorNum; });
+        });
+        var cards = rotasL.map(function (r) { return cartaoRota(r, grupos[r]); }).join("");
+        html += letraSecao(L, rotasL.length, nPac, val, cards);
       });
     }
     $("#lista-rotas").innerHTML = html;
@@ -1310,6 +1368,57 @@
       '<div class="kpi-num">' + num + '</div>' +
       '<div class="kpi-lab">' + lab + '</div>' +
     '</div>';
+  }
+
+  function letraSecao(letra, nRotas, nPac, val, cardsHtml) {
+    var stats = '<strong>' + nRotas + '</strong> rota(s) &middot; <strong>' + nPac + '</strong> pacote(s)' +
+      (comValores ? ' &middot; <strong>' + formatarBRL(val) + '</strong>' : '');
+    return '<div class="letra-grupo" data-letra="' + escapar(letra) + '">' +
+        '<div class="letra-cabeca">' +
+          '<span class="letra-nome">' + escapar(letra) + '</span>' +
+          '<span class="letra-stats">' + stats + '</span>' +
+          '<span class="seta">&#9660;</span>' +
+        '</div>' +
+        '<div class="letra-corpo">' + cardsHtml + '</div>' +
+      '</div>';
+  }
+
+  // Estatísticas relevantes (gaiola com mais bingo, pacote mais caro, maior tempo)
+  function renderizarDestaques(rotas, grupos) {
+    var itens = [];
+
+    // Gaiola (rota) com mais pacotes em bingo
+    var maxRota = null, maxCount = -1;
+    rotas.forEach(function (r) {
+      if (grupos[r].length > maxCount) { maxCount = grupos[r].length; maxRota = r; }
+    });
+    if (maxRota) itens.push(["Gaiola com mais bingo", maxRota + " — " + maxCount + " pacote(s)"]);
+
+    // Pacote mais caro parado
+    if (comValores) {
+      var caro = null;
+      faltantes.forEach(function (f) {
+        var v = valores[f.id];
+        if (v && (!caro || v.valorNum > caro.v)) caro = { v: v.valorNum, id: f.id, rota: f.rota };
+      });
+      if (caro && caro.v > 0) itens.push(["Pacote mais caro parado", formatarBRL(caro.v) + " · " + caro.id + " (" + caro.rota + ")"]);
+    }
+
+    // Maior tempo parado
+    if (houveHistorico) {
+      var mt = null;
+      faltantes.forEach(function (f) {
+        if (!mt || f.minutos > mt.m) mt = { m: f.minutos, id: f.id, rota: f.rota };
+      });
+      if (mt && mt.m > 0) itens.push(["Maior tempo parado", formatarMinutos(mt.m) + " · " + mt.id + " (" + mt.rota + ")"]);
+    }
+
+    var el = $("#destaques");
+    if (!itens.length) { el.classList.add("oculto"); el.innerHTML = ""; return; }
+    el.classList.remove("oculto");
+    el.innerHTML = itens.map(function (d) {
+      return '<div class="destaque-item"><span class="d-lab">' + d[0] + '</span><span class="d-val">' + escapar(d[1]) + '</span></div>';
+    }).join("");
   }
 
   function escapar(txt) {
@@ -1422,7 +1531,11 @@
         return;
       }
 
-      // clique no cabeçalho recolhe/expande — exceto em controles interativos
+      // clique no cabeçalho da letra recolhe/expande o grupo inteiro
+      var lc = alvo.closest(".letra-cabeca");
+      if (lc) { lc.parentNode.classList.toggle("recolhido"); return; }
+
+      // clique no cabeçalho da rota recolhe/expande — exceto em controles interativos
       var cab = alvo.closest(".rota-cabeca");
       if (cab && !alvo.closest("input, label, button, .auditoria")) {
         cab.parentNode.classList.toggle("recolhido");
@@ -1542,6 +1655,12 @@
         if (mostrar) visiveis++;
       });
       card.style.display = visiveis > 0 ? "" : "none";
+    });
+    // oculta grupos de letra que ficaram sem rotas visíveis
+    $all(".letra-grupo").forEach(function (lg) {
+      var algum = Array.prototype.slice.call(lg.querySelectorAll(".rota-cartao"))
+        .some(function (c) { return c.style.display !== "none"; });
+      lg.style.display = algum ? "" : "none";
     });
     var sel = $("#filtro-tempo");
     if (sel) sel.classList.toggle("ativo", filtroMin > 0);
@@ -1769,6 +1888,7 @@
     $("#btn-sel-visiveis").addEventListener("click", selecionarVisiveis);
     $("#btn-expandir").addEventListener("click", function () {
       $all(".rota-cartao").forEach(function (c) { c.classList.remove("recolhido"); });
+      $all(".letra-grupo").forEach(function (c) { c.classList.remove("recolhido"); });
     });
     $("#btn-recolher").addEventListener("click", function () {
       $all(".rota-cartao").forEach(function (c) { c.classList.add("recolhido"); });
