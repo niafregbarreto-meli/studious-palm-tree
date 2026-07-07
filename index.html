@@ -1306,12 +1306,12 @@
 "    GROUP BY 1\n" +
 ") ITENS ON ITENS.PCT = SHI.SHP_SHIPMENT_ID\n" +
 "LEFT JOIN (\n" +
+"    -- horário da última mudança de status (para 'Na estação' = quando entrou)\n" +
 "    SELECT\n" +
-"        SAFE_CAST(SHP_LG_CC_EXTERNAL_REFERENCE_ID AS INT64) AS PCT,\n" +
-"        MIN(SHP_LG_CC_DATE_CREATED) AS ENTROU_STATION\n" +
-"    FROM `meli-bi-data.WHOWNER.LK_SHP_LG_SORTING_HISTORY`\n" +
-"    WHERE SHP_LG_CC_ACTION_TYPE = 'add sortable unit'\n" +
-"      AND SHP_LG_CC_DATE_CREATED >= DATETIME(CURRENT_DATE('America/Sao_Paulo'))\n" +
+"        SHP_SHIPMENT_ID AS PCT,\n" +
+"        MAX(SHP_LG_LAST_UPDATED) AS ENTROU_STATION\n" +
+"    FROM `meli-bi-data.WHOWNER.BT_SHP_LG_SHIPMENTS`\n" +
+"    WHERE SHP_LG_LAST_UPDATED >= DATETIME_SUB(CURRENT_DATETIME('America/Sao_Paulo'), INTERVAL 3 DAY)\n" +
 "    GROUP BY 1\n" +
 ") ENTRADA ON ENTRADA.PCT = SHI.SHP_SHIPMENT_ID\n" +
 "WHERE SHI.SHP_SHIPMENT_ID IN (\n    " + listaIds + "\n);";
