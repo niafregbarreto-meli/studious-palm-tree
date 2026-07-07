@@ -47,15 +47,28 @@
   .topo-inner {
     max-width: 1180px;
     margin: 0 auto;
-    padding: 14px 24px;
+    padding: 12px 24px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     gap: 16px;
-    flex-wrap: wrap;
+    position: relative;
+    min-height: 56px;
   }
-  .marca { display: flex; align-items: center; gap: 12px; }
-  .marca h1 { font-size: 18px; font-weight: 600; color: #2D3277; }
+  .marca-grupo { display: flex; align-items: center; gap: 14px; }
+  .logo { height: 44px; width: auto; display: block; }
+  .marca { display: flex; flex-direction: column; }
+  .marca h1 { font-size: 19px; font-weight: 700; color: #2D3277; line-height: 1.15; }
+  .subtitulo { font-size: 12px; color: #5B5B5B; font-weight: 400; }
+  .contexto {
+    position: absolute;
+    right: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
   .badge-site {
     background: #2D3277;
     color: #fff;
@@ -65,7 +78,16 @@
     padding: 3px 10px;
     border-radius: 20px;
   }
-  .subtitulo { font-size: 12px; color: #5B5B5B; font-weight: 400; }
+  .badge-site.sc { background: var(--ml-blue); }
+  .lembrete-topo {
+    font-size: 12px;
+    color: #5B5B5B;
+    background: rgba(255,255,255,.55);
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-left: 4px;
+  }
+  .lembrete-topo strong { color: #2D3277; }
 
   /* ─── Layout principal ─────────────────────────────────────── */
   main {
@@ -304,6 +326,48 @@
   }
   .oculto { display: none !important; }
 
+  /* ─── Modal de fluxo da operação ───────────────────────────── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 120;
+    padding: 20px;
+  }
+  .modal {
+    background: var(--surface);
+    border-radius: 10px;
+    box-shadow: var(--shadow-lg);
+    max-width: 440px;
+    width: 100%;
+    padding: 26px;
+    text-align: center;
+  }
+  .modal h3 { font-size: 18px; font-weight: 700; color: #2D3277; margin-bottom: 8px; }
+  .modal p { font-size: 13.5px; color: var(--text-soft); margin-bottom: 22px; }
+  .modal-acoes { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+  /* ─── Banner de lembrete ───────────────────────────────────── */
+  .banner-lembrete {
+    background: #FFF8E1;
+    border: 1px solid #FFE082;
+    border-left: 4px solid var(--ml-orange);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    font-size: 13.5px;
+    color: #7A5C00;
+  }
+  .banner-lembrete strong { color: #5C4500; }
+  .banner-lembrete .btn { flex-shrink: 0; }
+
   /* ─── Toast ────────────────────────────────────────────────── */
   #toast {
     position: fixed;
@@ -330,10 +394,16 @@
     color: var(--text-muted);
   }
 
+  @media (max-width: 900px) {
+    .contexto { position: static; transform: none; margin-left: auto; }
+    .topo-inner { justify-content: flex-start; flex-wrap: wrap; }
+  }
   @media (max-width: 640px) {
     .etapas { flex-direction: column; }
     .etapa { border-right: none; border-bottom: 1px solid var(--border); }
-    .topo-inner { padding: 12px 16px; }
+    .topo-inner { padding: 12px 16px; gap: 10px; }
+    .lembrete-topo { display: none; }
+    .banner-lembrete { flex-direction: column; align-items: flex-start; }
     main { padding: 16px; }
   }
 </style>
@@ -342,11 +412,22 @@
 
 <header id="topo">
   <div class="topo-inner">
-    <div class="marca">
-      <h1>Bingo Hora a Hora</h1>
-      <span class="badge-site">SSC2</span>
+    <div class="marca-grupo">
+      <img src="https://logopng.com.br/logos/mercado-livre-88.png"
+           alt="Mercado Livre" class="logo"
+           onerror="this.style.display='none'" />
+      <div class="marca">
+        <h1>Bingo Hora a Hora</h1>
+        <span class="subtitulo">Monitoramento de pacotes na estação sem atrelamento</span>
+      </div>
     </div>
-    <span class="subtitulo">Monitoramento de pacotes na estação sem atrelamento</span>
+    <div class="contexto">
+      <span class="badge-site">MLB</span>
+      <span class="badge-site sc">SSC2</span>
+      <span class="lembrete-topo oculto" id="lembrete-topo">
+        Próxima verificação: <strong id="lembrete-tempo">30:00</strong>
+      </span>
+    </div>
   </div>
 </header>
 
@@ -385,6 +466,12 @@
         selecione o grupo e o dia desejados e clique em <strong>Baixar faltantes</strong>.
         Em seguida, carregue o arquivo <strong>.csv</strong> gerado abaixo.
       </p>
+      <div class="aviso">
+        Recomenda-se baixar os faltantes a cada <strong>30 minutos</strong>
+        (ou <strong>45 minutos</strong> quando a operação está congestionada)
+        e recarregar o arquivo para comparar os pacotes que ainda não foram
+        atrelados.
+      </div>
       <label class="dropzone" id="dz-faltantes">
         <input type="file" id="file-faltantes" accept=".csv,text/csv" />
         <div class="dz-titulo">Arraste o CSV de faltantes aqui</div>
@@ -442,6 +529,15 @@
 
   <!-- ETAPA 4: Resultado -->
   <section class="oculto" id="card-4">
+    <div class="banner-lembrete oculto" id="banner-lembrete">
+      <span>
+        <strong>Hora de atualizar.</strong>
+        Baixe os faltantes novamente no monitoramento e recarregue o arquivo
+        para comparar os pacotes que ainda não foram atrelados.
+      </span>
+      <button class="btn btn-neutro" id="fechar-lembrete">Entendido</button>
+    </div>
+
     <div class="resumo" id="resumo"></div>
 
     <div class="ferramentas">
@@ -461,6 +557,21 @@
   Bingo Hora a Hora &middot; Ferramenta interna de monitoramento &middot; SSC2
 </footer>
 
+<!-- Modal: fluxo da operação -->
+<div class="modal-overlay oculto" id="modal-fluxo">
+  <div class="modal">
+    <h3>Como está o fluxo da operação?</h3>
+    <p>
+      Antes do próximo lembrete, confirme a situação das ilhas. Se estiverem
+      congestionadas, o intervalo de verificação aumenta para 45 minutos.
+    </p>
+    <div class="modal-acoes">
+      <button class="btn btn-primario" data-fluxo="tranquilo">Tranquilo — 30 min</button>
+      <button class="btn btn-secundario" data-fluxo="congestionado">Ilhas cheias — 45 min</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -471,6 +582,12 @@
   var faltantes = [];   // linhas "Na estação"
   var valores   = {};   // mapa ID -> { valor, valorNum, conteudo }
   var comValores = false;
+
+  // ─── Lembrete de atualização ─────────────────────────────────
+  var intervaloMin      = 30;    // 30 min (tranquilo) ou 45 min (congestionado)
+  var lembreteCountdown = null;  // setInterval do contador
+  var lembreteSegundos  = 0;
+  var ciclosLembrete    = 0;     // conta ciclos p/ perguntar 1 a cada 3
 
   // ─── Utilidades ──────────────────────────────────────────────
   function $(sel) { return document.querySelector(sel); }
@@ -585,6 +702,60 @@
     if (!el) return;
     el.classList.remove("ativa", "concluida");
     if (estado) el.classList.add(estado);
+  }
+
+  // ─── Lembrete de atualização (30 / 45 min) ───────────────────
+  function iniciarLembrete() {
+    pararLembrete();
+    lembreteSegundos = intervaloMin * 60;
+    $("#lembrete-topo").classList.remove("oculto");
+    atualizarLembreteTopo();
+    lembreteCountdown = setInterval(function () {
+      lembreteSegundos--;
+      if (lembreteSegundos <= 0) {
+        clearInterval(lembreteCountdown);
+        dispararLembrete();
+      } else {
+        atualizarLembreteTopo();
+      }
+    }, 1000);
+  }
+
+  function atualizarLembreteTopo() {
+    var m = Math.floor(lembreteSegundos / 60);
+    var s = lembreteSegundos % 60;
+    $("#lembrete-tempo").textContent =
+      (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function pararLembrete() {
+    if (lembreteCountdown) { clearInterval(lembreteCountdown); lembreteCountdown = null; }
+  }
+
+  function dispararLembrete() {
+    ciclosLembrete++;
+    // 1 a cada 3 ciclos: pergunta o fluxo antes de lembrar
+    if (ciclosLembrete % 3 === 0) {
+      $("#modal-fluxo").classList.remove("oculto");
+    } else {
+      mostrarBannerLembrete();
+      iniciarLembrete();
+    }
+  }
+
+  function mostrarBannerLembrete() {
+    $("#banner-lembrete").classList.remove("oculto");
+    if (typeof faltantes !== "undefined") {
+      $("#card-4").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  function responderFluxo(fluxo) {
+    intervaloMin = (fluxo === "congestionado") ? 45 : 30;
+    $("#modal-fluxo").classList.add("oculto");
+    mostrarBannerLembrete();
+    iniciarLembrete();
+    toast("Intervalo ajustado para " + intervaloMin + " minutos.");
   }
 
   // ─── ETAPA 1: processar faltantes ────────────────────────────
@@ -773,6 +944,10 @@
     $("#lista-rotas").innerHTML = html;
     ligarCabecas();
 
+    // esconde o banner de lembrete (recém-atualizado) e reinicia o contador
+    $("#banner-lembrete").classList.add("oculto");
+    iniciarLembrete();
+
     $("#card-4").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -900,6 +1075,11 @@
   // ─── Reiniciar ───────────────────────────────────────────────
   function reiniciar() {
     faltantes = []; valores = {}; comValores = false;
+    pararLembrete();
+    ciclosLembrete = 0; intervaloMin = 30;
+    $("#lembrete-topo").classList.add("oculto");
+    $("#banner-lembrete").classList.add("oculto");
+    $("#modal-fluxo").classList.add("oculto");
     $("#card-2").classList.add("oculto");
     $("#card-3").classList.add("oculto");
     $("#card-4").classList.add("oculto");
@@ -968,6 +1148,15 @@
     });
     $("#btn-exportar").addEventListener("click", exportarCSV);
     $("#btn-reiniciar").addEventListener("click", reiniciar);
+
+    $all("[data-fluxo]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        responderFluxo(this.getAttribute("data-fluxo"));
+      });
+    });
+    $("#fechar-lembrete").addEventListener("click", function () {
+      $("#banner-lembrete").classList.add("oculto");
+    });
   });
 
 })();
