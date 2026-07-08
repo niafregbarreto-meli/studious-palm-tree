@@ -461,9 +461,9 @@
   #area-impressao th, #area-impressao td { border: 1px solid #CCC; padding: 6px 8px; text-align: left; }
   #area-impressao th { background: #F2F2F2; }
   @media print {
-    body * { visibility: hidden; }
-    #area-impressao, #area-impressao * { visibility: visible; }
-    #area-impressao { position: static; left: auto; top: auto; width: 100%; height: auto; overflow: visible; margin: 16px; }
+    /* esconde tudo do layout, exceto a área de impressão (evita páginas em branco) */
+    body > *:not(#area-impressao) { display: none !important; }
+    #area-impressao { position: static; left: auto; top: auto; width: 100%; height: auto; overflow: visible; margin: 0; }
   }
 
   /* ─── Estados vazios / avisos ──────────────────────────────── */
@@ -1286,7 +1286,7 @@
     toast("Buscando valores da planilha...");
 
     function ler(aba) {
-      return Grid.sheets.get(SHEET_ID, "'" + aba + "'!A:Z").then(function (data) {
+      return Grid.sheets.get(SHEET_ID, "'" + aba + "'!A:D").then(function (data) {
         if (!data || !data.values || data.values.length < 2) throw new Error("aba vazia: " + aba);
         processarValoresLinhas(data.values);
       });
