@@ -790,6 +790,8 @@
 
 <div id="toast"></div>
 
+<!-- SDK do Grid (só existe quando hospedado no Grid; fora dele o 404 é inócuo) -->
+<script src="/d/_assets/grid-sdk.js"></script>
 <script>
 (function () {
   "use strict";
@@ -803,6 +805,14 @@
   // Opcional: URL do Web App do Google Apps Script (/exec) para histórico
   // COMPARTILHADO entre várias máquinas. Se vazia, usa apenas o navegador.
   var URL_BACKEND = "";
+
+  // Automação dos valores via Grid.sheets (quando hospedado no Grid):
+  // lê a planilha conectada ao BigQuery com o OAuth do dono (server-side).
+  // Preencha com o ID da planilha e o nome da aba EXTRAÍDA (com dados reais).
+  // A aba deve ter as colunas SHP_SHIPMENT_ID, MOEDA_LOCAL, SHP_ITEM_DESC
+  // e (para o tempo) ENTROU_STATION.
+  var SHEET_ID  = "1gWfBkhFDU7NS2TLXgtEfGTLmVJkqJfHCUd3gL77BGrE";
+  var SHEET_ABA = "Extração 1";
 
   // ─── Backend compartilhado (Apps Script) ─────────────────────
   function backendPost(payload) {
@@ -1240,14 +1250,39 @@
       return;
     }
 
-    // Se houver planilha de valores publicada, busca automaticamente;
-    // caso contrário, mostra o fluxo manual (etapas 2 e 3).
+    // 1) Grid.sheets (planilha conectada, quando hospedado no Grid)
+    if (buscarValoresPlanilha()) return;
+    // 2) CSV publicado (opcional)
     if (tentarAutoValores()) return;
+    // 3) fluxo manual (etapas 2 e 3)
+    mostrarManual();
+  }
 
+  function mostrarManual() {
     $("#card-2").classList.remove("oculto");
     $("#card-3").classList.remove("oculto");
     marcarEtapa(2, "ativa");
     $("#card-2").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // Lê a planilha de valores via Grid.sheets (OAuth do dono, server-side).
+  function buscarValoresPlanilha() {
+    if (!(window.Grid && Grid.sheets && SHEET_ID)) return false;
+    try {
+      var m = location.pathname.match(/\/d\/([^\/]+)/);
+      if (m && Grid.configure) Grid.configure({ docId: m[1] });
+    } catch (e) {}
+    toast("Buscando valores da planilha...");
+    Grid.sheets.get(SHEET_ID, "'" + SHEET_ABA + "'!A:Z")
+      .then(function (data) {
+        if (!data || !data.values || data.values.length < 2) throw new Error("planilha vazia");
+        processarValoresLinhas(data.values);
+      })
+      .catch(function () {
+        toast("Não foi possível ler a planilha. Use o modo manual.");
+        mostrarManual();
+      });
+    return true;
   }
 
   // Busca automática de valores a partir de uma planilha publicada (CSV)
@@ -1261,12 +1296,8 @@
       })
       .then(function (t) { processarValores(t); })
       .catch(function () {
-        // fallback para o modo manual
-        $("#card-2").classList.remove("oculto");
-        $("#card-3").classList.remove("oculto");
-        marcarEtapa(2, "ativa");
         toast("Não foi possível buscar os valores. Use o modo manual.");
-        $("#card-2").scrollIntoView({ behavior: "smooth", block: "start" });
+        mostrarManual();
       });
     return true;
   }
@@ -1313,7 +1344,12 @@
   // ─── ETAPA 3: processar valores ──────────────────────────────
   function processarValores(texto) {
     var linhas = parseCSV(texto);
-    if (linhas.length < 2) { toast("Arquivo de valores vazio ou inválido."); return; }
+    processarValoresLinhas(linhas);
+  }
+
+  // Processa as linhas de valores (de CSV ou da planilha via Grid.sheets)
+  function processarValoresLinhas(linhas) {
+    if (!linhas || linhas.length < 2) { toast("Dados de valores vazios ou inválidos."); return; }
 
     var cab = linhas[0];
     var idxId  = acharColuna(cab, ["SHP_SHIPMENT_ID", "ID do pacote", "ID", "PCT"]);
