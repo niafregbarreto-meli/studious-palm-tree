@@ -1368,17 +1368,19 @@
 
     if (idxId === -1) { toast("Coluna de ID não encontrada no arquivo de valores."); return; }
 
+    function celula(l, idx) { return (idx !== -1 && l[idx] != null) ? String(l[idx]).trim() : ""; }
+
     valores = {};
     for (var i = 1; i < linhas.length; i++) {
       var l = linhas[i];
-      var id = (l[idxId] || "").trim();
+      var id = celula(l, idxId);
       if (!id) continue;
-      var valTxt = idxVal !== -1 ? (l[idxVal] || "").trim() : "";
+      var valTxt = celula(l, idxVal);
       valores[id] = {
         valor: valTxt,
         valorNum: moedaParaNumero(valTxt),
-        conteudo: idxDesc !== -1 ? (l[idxDesc] || "").trim() : "",
-        entrou: idxTempo !== -1 ? parseDataHora(l[idxTempo]) : 0
+        conteudo: celula(l, idxDesc),
+        entrou: idxTempo !== -1 ? parseDataHora(celula(l, idxTempo)) : 0
       };
     }
     comValores = true;
