@@ -732,10 +732,12 @@
     <div id="lista-rotas"></div>
   </section>
 
-  <!-- Área usada apenas para impressão em PDF -->
-  <div id="area-impressao"></div>
-
 </main>
+
+<!-- Área usada apenas para impressão em PDF — precisa ser filha direta do
+     body, senão a regra de impressão que esconde os irmãos do body a esconde
+     também (ficava dentro de <main>, que era escondido). -->
+<div id="area-impressao"></div>
 
 <footer>
   Bingo Hora a Hora &middot; Ferramenta interna de monitoramento &middot; SSC2
