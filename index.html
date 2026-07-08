@@ -855,6 +855,7 @@
   var houveHistorico = false;  // já existia uma carga anterior?
   var tempoGlobal    = false;  // algum pacote tem horário de entrada conhecido
   var mostrarTempoCol= true;   // exibir a coluna de tempo
+  var colapsarPorPadrao = false; // recolher rotas por padrão quando há muitos pacotes
 
   var encontrados  = {};  // id -> ts (pacotes marcados como encontrados)
   var auditorias   = {};  // rota -> { rep, ts } (gaiola auditada)
@@ -1473,6 +1474,9 @@
 
     // a coluna de tempo é sempre exibida
     mostrarTempoCol = true;
+    // com muitos pacotes, inicia com as rotas recolhidas (renderiza muito
+    // mais rápido; as tabelas ocultas não custam layout). O usuário expande.
+    colapsarPorPadrao = faltantes.length > 200;
 
     var grupos = agrupar();
     var rotas = Object.keys(grupos).sort(ordenarRotas);
@@ -1675,7 +1679,7 @@
           '<input type="text" class="input-rep" data-rota="' + escapar(rota) + '" placeholder="nome do rep" />' +
         '</span>';
 
-    return '<div class="rota-cartao" data-rota="' + escapar(rota) + '">' +
+    return '<div class="rota-cartao' + (colapsarPorPadrao ? ' recolhido' : '') + '" data-rota="' + escapar(rota) + '">' +
       '<div class="rota-cabeca">' +
         '<label class="rota-sel" title="Selecionar toda a gaiola"><input type="checkbox" class="sel-rota" data-rota="' + escapar(rota) + '"></label>' +
         '<div class="rota-id">' +
