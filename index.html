@@ -451,11 +451,19 @@
   .selecao-info { font-size: 13px; color: var(--text-soft); margin-right: auto; }
   .selecao-info strong { color: var(--text); }
 
-  /* impressão */
+  /* impressão — na tela fica fora de vista; ao imprimir ocupa a página */
+  #area-impressao { position: fixed; left: -10000px; top: 0; width: 1px; height: 1px; overflow: hidden; }
+  #area-impressao h1 { font-size: 18px; margin: 0 0 2px; }
+  #area-impressao .sub { font-size: 12px; color: #666; margin-bottom: 16px; }
+  #area-impressao .grupo { margin-bottom: 22px; page-break-inside: avoid; }
+  #area-impressao h2 { font-size: 14px; background: #FFE600; padding: 6px 10px; border-radius: 4px; margin: 0 0 6px; }
+  #area-impressao table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  #area-impressao th, #area-impressao td { border: 1px solid #CCC; padding: 6px 8px; text-align: left; }
+  #area-impressao th { background: #F2F2F2; }
   @media print {
     body * { visibility: hidden; }
     #area-impressao, #area-impressao * { visibility: visible; }
-    #area-impressao { position: absolute; left: 0; top: 0; width: 100%; }
+    #area-impressao { position: static; left: auto; top: auto; width: 100%; height: auto; overflow: visible; margin: 16px; }
   }
 
   /* ─── Estados vazios / avisos ──────────────────────────────── */
@@ -723,7 +731,7 @@
   </section>
 
   <!-- Área usada apenas para impressão em PDF -->
-  <div id="area-impressao" style="display:none;"></div>
+  <div id="area-impressao"></div>
 
 </main>
 
@@ -1943,31 +1951,13 @@
         "</div>";
     });
 
-    var estilo =
-      "body{font-family:Arial,Helvetica,sans-serif;color:#222;margin:24px;}" +
-      "h1{font-size:18px;margin:0 0 2px;}" +
-      ".sub{font-size:12px;color:#666;margin-bottom:16px;}" +
-      ".grupo{margin-bottom:22px;page-break-inside:avoid;}" +
-      "h2{font-size:14px;background:#FFE600;padding:6px 10px;border-radius:4px;margin:0 0 6px;}" +
-      "table{width:100%;border-collapse:collapse;font-size:12px;}" +
-      "th,td{border:1px solid #CCC;padding:6px 8px;text-align:left;}" +
-      "th{background:#F2F2F2;}";
-
-    var doc =
-      "<!DOCTYPE html><html lang='pt-BR'><head><meta charset='UTF-8'>" +
-      "<title>Bingo Hora a Hora - Impressão</title><style>" + estilo + "</style></head><body>" +
+    // Imprime na própria página (sem pop-up — compatível com o Grid).
+    var area = $("#area-impressao");
+    area.innerHTML =
       "<h1>Bingo Hora a Hora &middot; SSC2</h1>" +
       "<div class='sub'>Pacotes a buscar &middot; " + totalSel + " selecionado(s) &middot; gerado em " + dataStr + "</div>" +
-      corpo +
-      "</body></html>";
-
-    var w = window.open("", "_blank");
-    if (!w) { toast("Permita pop-ups para gerar o PDF."); return; }
-    w.document.open();
-    w.document.write(doc);
-    w.document.close();
-    w.focus();
-    setTimeout(function () { w.print(); }, 300);
+      corpo;
+    setTimeout(function () { window.print(); }, 150);
   }
 
   // ─── Reiniciar ───────────────────────────────────────────────
