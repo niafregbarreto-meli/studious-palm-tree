@@ -574,9 +574,11 @@
 <header id="topo">
   <div class="topo-inner">
     <div class="marca-grupo">
-      <img src="https://logopng.com.br/logos/mercado-livre-88.png"
-           alt="Mercado Livre" class="logo"
-           onerror="this.style.display='none'" />
+      <svg class="logo" width="40" height="40" viewBox="0 0 24 24" fill="none" aria-label="SSC2" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2 3 6.5v11L12 22l9-4.5v-11L12 2Z" fill="#2D3277"/>
+        <path d="M3 6.5 12 11l9-4.5" stroke="#FFE600" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M12 11v11" stroke="#FFE600" stroke-width="1.6"/>
+      </svg>
       <div class="marca">
         <h1>Bingo Hora a Hora</h1>
       </div>
@@ -1274,6 +1276,7 @@
   }
 
   // Lê a planilha de valores via Grid.sheets (OAuth do dono, server-side).
+  // Descobre a aba de extração automaticamente (a que começa com "Extra").
   function buscarValoresPlanilha() {
     if (!(window.Grid && Grid.sheets && SHEET_ID)) return false;
     try {
@@ -1281,15 +1284,31 @@
       if (m && Grid.configure) Grid.configure({ docId: m[1] });
     } catch (e) {}
     toast("Buscando valores da planilha...");
-    Grid.sheets.get(SHEET_ID, "'" + SHEET_ABA + "'!A:Z")
-      .then(function (data) {
-        if (!data || !data.values || data.values.length < 2) throw new Error("planilha vazia");
+
+    function ler(aba) {
+      return Grid.sheets.get(SHEET_ID, "'" + aba + "'!A:Z").then(function (data) {
+        if (!data || !data.values || data.values.length < 2) throw new Error("aba vazia: " + aba);
         processarValoresLinhas(data.values);
-      })
-      .catch(function () {
-        toast("Não foi possível ler a planilha. Use o modo manual.");
-        mostrarManual();
       });
+    }
+
+    // 1) tenta descobrir a aba de extração pelo info; 2) cai para SHEET_ABA
+    var p = (Grid.sheets.info ? Grid.sheets.info(SHEET_ID) : Promise.reject())
+      .then(function (info) {
+        var abas = (info && info.sheets) || [];
+        var extra = abas
+          .filter(function (s) { return /^extra/i.test(s.title || ""); })
+          .sort(function (a, b) { return (b.rowCount || 0) - (a.rowCount || 0); });
+        var alvo = (extra[0] && extra[0].title) || SHEET_ABA;
+        return ler(alvo);
+      })
+      .catch(function () { return ler(SHEET_ABA); });
+
+    p.catch(function (err) {
+      console.error("[Bingo] leitura da planilha falhou:", err);
+      toast("Não foi possível ler a planilha. Verifique o Google conectado no Grid. Usando modo manual.");
+      mostrarManual();
+    });
     return true;
   }
 
