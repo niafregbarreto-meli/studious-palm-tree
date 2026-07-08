@@ -849,6 +849,43 @@
     try { localStorage.setItem(chave, JSON.stringify(valor)); } catch (e) { /* quota */ }
   }
 
+  // ─── Estado colaborativo (Grid) com fallback a localStorage ──
+  // Se a app rodar hospedada no Grid, usa window.GRID.state (JSON
+  // compartilhado entre todos os usuários). Fora do Grid, usa localStorage.
+  var GS = (typeof window !== "undefined" && window.GRID && window.GRID.state) ? window.GRID.state : null;
+
+  function carregarColab(cb) {
+    if (GS) {
+      GS.get().then(function (r) {
+        var s = (r && r.state) || {};
+        encontrados = s.encontrados || {};
+        auditorias  = s.auditorias || {};
+        if (cb) cb();
+      }).catch(function () {
+        encontrados = {}; auditorias = {}; if (cb) cb();
+      });
+    } else {
+      encontrados = lerJSON(KEY_ENCONTRADOS, {});
+      auditorias  = lerJSON(KEY_AUDITORIAS, {});
+      if (cb) cb();
+    }
+  }
+
+  // grava o estado compartilhado (read-merge-write para não sobrescrever colegas)
+  function salvarColab() {
+    if (GS) {
+      GS.get().then(function (r) {
+        var s = (r && r.state) || {};
+        s.encontrados = encontrados;
+        s.auditorias  = auditorias;
+        return GS.set(s);
+      }).catch(function () {});
+    } else {
+      gravarJSON(KEY_ENCONTRADOS, encontrados);
+      gravarJSON(KEY_AUDITORIAS, auditorias);
+    }
+  }
+
   // ─── Lembrete de atualização ─────────────────────────────────
   var intervaloMin      = 30;    // 30 min (tranquilo) ou 45 min (congestionado)
   var lembreteCountdown = null;  // setInterval do contador
@@ -1723,8 +1760,7 @@
     if (encontrados[id]) { delete encontrados[id]; }
     else { encontrados[id] = Date.now(); }
     var achado = !!encontrados[id];
-    gravarJSON(KEY_ENCONTRADOS, encontrados);
-    if (URL_BACKEND) backendPost({ action: "encontrado", id: id, marcado: achado }).catch(function () {});
+    salvarColab();
     btn.classList.toggle("ativo", achado);
     btn.textContent = achado ? "Encontrado" : "Marcar";
     var tr = btn.closest("tr");
@@ -1736,8 +1772,7 @@
     var rep = input.value.trim();
     if (!rep) return;
     auditorias[rota] = { rep: rep, ts: Date.now() };
-    gravarJSON(KEY_AUDITORIAS, auditorias);
-    if (URL_BACKEND) backendPost({ action: "auditoria", rota: rota, rep: rep }).catch(function () {});
+    salvarColab();
     var span = input.closest(".auditoria");
     if (span) {
       span.classList.add("feita");
@@ -1750,15 +1785,16 @@
     $("#qtd-selecionados").textContent = Object.keys(selecionados).length;
   }
 
-  // ─── Sincronização com o backend (outras máquinas) ───────────
+  // ─── Sincronização (outras máquinas) via Grid state ──────────
   var pollTimer = null;
   function iniciarPoll() {
-    if (!URL_BACKEND) return;
+    if (!GS) return; // só quando hospedado no Grid
     pararPoll();
     pollTimer = setInterval(function () {
-      backendGet({ action: "state" }).then(function (st) {
-        encontrados = st.encontrados || {};
-        auditorias  = st.auditorias || {};
+      GS.get().then(function (r) {
+        var s = (r && r.state) || {};
+        encontrados = s.encontrados || {};
+        auditorias  = s.auditorias || {};
         atualizarMarcasDOM();
       }).catch(function () {});
     }, 60000);
@@ -2086,9 +2122,8 @@
     tickRelogio();
     setInterval(tickRelogio, 1000);
 
-    // carrega estado persistido e configura interações
-    encontrados = lerJSON(KEY_ENCONTRADOS, {});
-    auditorias  = lerJSON(KEY_AUDITORIAS, {});
+    // carrega estado colaborativo (Grid) ou local, e configura interações
+    carregarColab(function () { if (faltantes.length) atualizarMarcasDOM(); });
     configurarInteracoes();
     resumirLembrete();
   });
