@@ -822,7 +822,10 @@
   // A aba deve ter as colunas SHP_SHIPMENT_ID, MOEDA_LOCAL, SHP_ITEM_DESC
   // e (para o tempo) ENTROU_STATION.
   var SHEET_ID  = "1gWfBkhFD07NS2TLXgtEfGTLmVJkqjfHCUd3gL77BGrE";
-  var SHEET_ABA = "Extração 1";
+  // IMPORTANTE: renomeie a aba de extração para um nome simples (sem acentos,
+  // espaços ou números com underline) — nomes como "Extração 1" causam erro
+  // "Sheet range contains invalid characters" no proxy de sheets do Grid.
+  var SHEET_ABA = "DADOS";
 
   // ─── Backend compartilhado (Apps Script) ─────────────────────
   function backendPost(payload) {
@@ -1286,21 +1289,27 @@
     } catch (e) {}
     toast("Buscando valores da planilha...");
 
+    // Nomes com espaço/acentos precisam de aspas simples na notação A1; nomes
+    // simples (só letras/números/_) não. Aspas em nomes acentuados causaram
+    // "invalid characters" no proxy de sheets do Grid — por isso preferimos
+    // nomes simples (ver SHEET_ABA) e só citamos quando estritamente preciso.
     function ler(aba) {
-      return Grid.sheets.get(SHEET_ID, "'" + aba + "'!A:D").then(function (data) {
+      var simples = /^[A-Za-z0-9_]+$/.test(aba);
+      var ref = simples ? aba : ("'" + aba + "'");
+      return Grid.sheets.get(SHEET_ID, ref + "!A:D").then(function (data) {
         if (!data || !data.values || data.values.length < 2) throw new Error("aba vazia: " + aba);
         processarValoresLinhas(data.values);
       });
     }
 
-    // 1) tenta descobrir a aba de extração pelo info; 2) cai para SHEET_ABA
+    // 1) tenta descobrir uma aba de extração de nome simples (ASCII); 2) cai para SHEET_ABA
     var p = (Grid.sheets.info ? Grid.sheets.info(SHEET_ID) : Promise.reject())
       .then(function (info) {
         var abas = (info && info.sheets) || [];
-        var extra = abas
-          .filter(function (s) { return /^extra/i.test(s.title || ""); })
+        var candidatas = abas
+          .filter(function (s) { return /^[A-Za-z0-9_]+$/.test(s.title || "") && /extra|dados|data/i.test(s.title || ""); })
           .sort(function (a, b) { return (b.rowCount || 0) - (a.rowCount || 0); });
-        var alvo = (extra[0] && extra[0].title) || SHEET_ABA;
+        var alvo = (candidatas[0] && candidatas[0].title) || SHEET_ABA;
         return ler(alvo);
       })
       .catch(function () { return ler(SHEET_ABA); });
