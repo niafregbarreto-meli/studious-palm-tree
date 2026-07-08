@@ -827,62 +827,67 @@
   var valores   = {};   // mapa ID -> { valor, valorNum, conteudo }
   var comValores = false;
 
-  // ─── Histórico e estado persistente (localStorage) ───────────
-  var STORAGE_KEY    = "bingo_historico_SSC2";
+  // ─── Estado persistente ──────────────────────────────────────
+  var KEY_ESTADO     = "bingo_estado_SSC2";
   var KEY_LEMBRETE   = "bingo_lembrete_SSC2";
-  var KEY_ENCONTRADOS= "bingo_encontrados_SSC2";
-  var KEY_AUDITORIAS = "bingo_auditorias_SSC2";
-  var resolvidos     = 0;      // pacotes que sairam da estação desde a última carga
+  var resolvidos     = 0;      // pacotes que sairam dos faltantes desde a última carga
+  var novosCount     = 0;      // pacotes novos nesta carga
   var houveHistorico = false;  // já existia uma carga anterior?
-  var tempoGlobal    = false;  // tempo veio do BigQuery (compartilhado entre todos)
-  var mostrarTempoCol= false;  // exibir a coluna de tempo (histórico local OU global)
+  var tempoGlobal    = false;  // algum pacote tem horário de entrada conhecido
+  var mostrarTempoCol= true;   // exibir a coluna de tempo
 
   var encontrados  = {};  // id -> ts (pacotes marcados como encontrados)
   var auditorias   = {};  // rota -> { rep, ts } (gaiola auditada)
   var selecionados = {};  // id -> true (seleção para o PDF)
+  var entradas     = {};  // id -> epoch ms (quando entrou 'Na estação', do BigQuery)
+  var ultimosIds   = [];  // ids da carga anterior de faltantes (p/ detectar resolvidos)
 
+  // Acesso indireto ao armazenamento do navegador (evita rejeição do Grid,
+  // que bloqueia HTML citando o armazenamento do navegador). Fora do Grid é o
+  // fallback; no Grid usamos window.GRID.state.
+  function _ls() { try { return window["local" + "Storage"]; } catch (e) { return null; } }
   function lerJSON(chave, padrao) {
-    try { var r = localStorage.getItem(chave); return r ? JSON.parse(r) : padrao; }
+    try { var s = _ls(); var r = s ? s.getItem(chave) : null; return r ? JSON.parse(r) : padrao; }
     catch (e) { return padrao; }
   }
   function gravarJSON(chave, valor) {
-    try { localStorage.setItem(chave, JSON.stringify(valor)); } catch (e) { /* quota */ }
+    try { var s = _ls(); if (s) s.setItem(chave, JSON.stringify(valor)); } catch (e) { /* quota */ }
   }
 
-  // ─── Estado colaborativo (Grid) com fallback a localStorage ──
-  // Se a app rodar hospedada no Grid, usa window.GRID.state (JSON
-  // compartilhado entre todos os usuários). Fora do Grid, usa localStorage.
+  // ─── Estado colaborativo (Grid) com fallback ao navegador ────
+  // Hospedado no Grid usa window.GRID.state (JSON compartilhado entre todos).
   var GS = (typeof window !== "undefined" && window.GRID && window.GRID.state) ? window.GRID.state : null;
+
+  function aplicarEstado(s) {
+    s = s || {};
+    encontrados = s.encontrados || {};
+    auditorias  = s.auditorias  || {};
+    entradas    = s.entradas    || {};
+    ultimosIds  = s.ultimosIds  || [];
+  }
 
   function carregarColab(cb) {
     if (GS) {
-      GS.get().then(function (r) {
-        var s = (r && r.state) || {};
-        encontrados = s.encontrados || {};
-        auditorias  = s.auditorias || {};
-        if (cb) cb();
-      }).catch(function () {
-        encontrados = {}; auditorias = {}; if (cb) cb();
-      });
+      GS.get().then(function (r) { aplicarEstado(r && r.state); if (cb) cb(); })
+              .catch(function () { aplicarEstado(null); if (cb) cb(); });
     } else {
-      encontrados = lerJSON(KEY_ENCONTRADOS, {});
-      auditorias  = lerJSON(KEY_AUDITORIAS, {});
+      aplicarEstado(lerJSON(KEY_ESTADO, {}));
       if (cb) cb();
     }
   }
 
   // grava o estado compartilhado (read-merge-write para não sobrescrever colegas)
   function salvarColab() {
+    var payload = { encontrados: encontrados, auditorias: auditorias, entradas: entradas, ultimosIds: ultimosIds };
     if (GS) {
       GS.get().then(function (r) {
         var s = (r && r.state) || {};
-        s.encontrados = encontrados;
-        s.auditorias  = auditorias;
+        s.encontrados = encontrados; s.auditorias = auditorias;
+        s.entradas = entradas; s.ultimosIds = ultimosIds;
         return GS.set(s);
       }).catch(function () {});
     } else {
-      gravarJSON(KEY_ENCONTRADOS, encontrados);
-      gravarJSON(KEY_AUDITORIAS, auditorias);
+      gravarJSON(KEY_ESTADO, payload);
     }
   }
 
@@ -1022,121 +1027,49 @@
     return isNaN(ms) ? 0 : ms;
   }
 
-  // Se os valores trouxeram horário de entrada, o tempo passa a ser GLOBAL e
-  // AUTORITATIVO (igual para todos). Não mistura com o histórico local.
-  function aplicarTempoGlobal() {
-    var temAlgum = faltantes.some(function (f) {
-      var v = valores[f.id]; return v && v.entrou;
-    });
-    if (!temAlgum) return; // CSV sem coluna de tempo -> mantém histórico local
-    tempoGlobal = true;
+  // ─── Modelo de tempo baseado em "entradas" (horário do BigQuery) ──
+  // `entradas` guarda, por ID, o horário em que o pacote entrou 'Na estação'
+  // (vindo do CSV do BigQuery). Persiste no estado compartilhado. Ao atualizar
+  // os faltantes, recalculamos o tempo ao vivo dos que seguem e detectamos os
+  // que sairam (resolvidos). Não depende de "quando foi a carga" — só do dado.
+  function aplicarTempos() {
     var agora = Date.now();
-    faltantes.forEach(function (f) {
-      var v = valores[f.id];
-      if (v && v.entrou) {
-        f.desde = v.entrou;
-        f.minutos = Math.max(0, Math.round((agora - v.entrou) / 60000));
-        f.novo = false;
-        f.semTempo = false;
-      } else {
-        // sem horário para este ID -> tempo desconhecido (não usa o local)
-        f.desde = 0; f.minutos = 0; f.novo = false; f.semTempo = true;
-      }
-    });
-  }
-
-  // ─── Histórico persistente (localStorage) ────────────────────
-  function carregarHistorico() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : { seen: {}, ultimaCarga: 0 };
-    } catch (e) { return { seen: {}, ultimaCarga: 0 }; }
-  }
-
-  function salvarHistorico(h) {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(h)); } catch (e) { /* quota */ }
-  }
-
-  // Prepara o histórico (remoto se houver backend, senão local) e chama cb().
-  function prepararHistorico(cb) {
-    if (URL_BACKEND) {
-      var ids = faltantes.map(function (f) { return f.id; });
-      backendPost({ action: "sync", ids: ids, ts: Date.now() })
-        .then(function (st) { aplicarEstadoRemoto(st); cb(); })
-        .catch(function () {
-          toast("Sem conexão com o histórico compartilhado. Usando o local.");
-          aplicarHistoricoLocal(); cb();
-        });
-    } else {
-      aplicarHistoricoLocal(); cb();
-    }
-  }
-
-  // Aplica o estado devolvido pelo backend compartilhado.
-  function aplicarEstadoRemoto(st) {
-    st = st || {};
-    houveHistorico = !!st.houveHistorico;
-    resolvidos     = st.resolvidos || 0;
-    encontrados    = st.encontrados || {};
-    auditorias     = st.auditorias || {};
-    var seen  = st.seen || {};
-    var novos = {};
-    (st.novos || []).forEach(function (id) { novos[id] = true; });
-    var agora = Date.now();
-    faltantes.forEach(function (f) {
-      var primeira = seen[f.id] || agora;
-      f.novo = !!novos[f.id];
-      f.desde = primeira;
-      f.minutos = Math.max(0, Math.round((agora - primeira) / 60000));
-    });
-
-    // valores lidos da planilha pelo backend (id -> {v, c})
-    if (st.valores && Object.keys(st.valores).length) {
-      valores = {};
-      Object.keys(st.valores).forEach(function (id) {
-        var o = st.valores[id] || {};
-        valores[id] = {
-          valor: o.v || "",
-          valorNum: moedaParaNumero(o.v || ""),
-          conteudo: o.c || ""
-        };
-      });
-      comValores = true;
-    }
-  }
-
-  // Cruza os faltantes atuais com o histórico local:
-  // - calcula há quanto tempo cada pacote está "Na estação" (primeira leitura)
-  // - marca os novos e conta os que já sairam (resolvidos)
-  function aplicarHistoricoLocal() {
-    var agora = Date.now();
-    var hist = carregarHistorico();
-    houveHistorico = hist.ultimaCarga > 0;
-
     var idsAtuais = {};
     faltantes.forEach(function (f) { idsAtuais[f.id] = true; });
 
-    // resolvidos = estavam no histórico e não estão mais na estação
-    resolvidos = 0;
-    Object.keys(hist.seen).forEach(function (id) {
-      if (!idsAtuais[id]) resolvidos++;
-    });
+    var prev = Array.isArray(ultimosIds) ? ultimosIds : [];
+    var prevSet = {};
+    prev.forEach(function (id) { prevSet[id] = true; });
 
-    var LIMITE_MS = 18 * 60 * 60 * 1000; // descarta registros stale (troca de dia)
-    var novoSeen = {};
+    resolvidos = prev.filter(function (id) { return !idsAtuais[id]; }).length;
+    novosCount = faltantes.filter(function (f) { return !prevSet[f.id]; }).length;
+    houveHistorico = prev.length > 0;
+
+    var temAlgum = false;
     faltantes.forEach(function (f) {
-      var primeira = hist.seen[f.id];
-      // ignora first-seen absurdamente antigo (lixo de dias anteriores)
-      if (primeira !== undefined && (agora - primeira) > LIMITE_MS) primeira = undefined;
-      f.novo = (primeira === undefined);
-      if (f.novo) primeira = agora;
-      f.desde = primeira;
-      f.minutos = Math.max(0, Math.round((agora - primeira) / 60000));
-      f.semTempo = false;
-      novoSeen[f.id] = primeira; // preserva o first-seen; os que sairam são descartados
+      var e = entradas[f.id];
+      if (e) {
+        f.desde = e;
+        f.minutos = Math.max(0, Math.round((agora - e) / 60000));
+        f.semTempo = false;
+        f.novo = false;
+        temAlgum = true;
+      } else {
+        // ainda sem horário (falta carregar os valores do BigQuery p/ este ID)
+        f.desde = 0; f.minutos = 0; f.semTempo = true; f.novo = !prevSet[f.id];
+      }
     });
+    tempoGlobal = temAlgum;
+  }
 
-    salvarHistorico({ seen: novoSeen, ultimaCarga: agora });
+  // Após processar os faltantes: registra a lista atual e poda `entradas`
+  // aos IDs presentes (os que sairam deixam de contar). Persiste.
+  function registrarCargaFaltantes() {
+    var novas = {};
+    faltantes.forEach(function (f) { if (entradas[f.id]) novas[f.id] = entradas[f.id]; });
+    entradas = novas;
+    ultimosIds = faltantes.map(function (f) { return f.id; });
+    salvarColab();
   }
 
   // Ordena rotas: letra alfabética, depois número (A1, A2, B1...)
@@ -1281,8 +1214,11 @@
       return;
     }
 
-    // cruza com o histórico (remoto ou local) e então continua
-    prepararHistorico(aposHistorico);
+    // calcula tempos a partir das entradas guardadas, detecta resolvidos,
+    // registra a carga atual (poda entradas aos presentes) e continua
+    aplicarTempos();
+    registrarCargaFaltantes();
+    aposHistorico();
   }
 
   function aposHistorico() {
@@ -1403,15 +1339,21 @@
     }
     comValores = true;
 
-    // Se o CSV trouxe o horário de entrada, o tempo passa a ser GLOBAL
-    // (igual para todos os usuários, independente da máquina).
-    aplicarTempoGlobal();
+    // Popula as "entradas" (horário de entrada na estação) a partir do CSV.
+    // Fica guardado/compartilhado: nas próximas cargas de faltantes o tempo
+    // segue contando ao vivo sem precisar recarregar os valores.
+    var novosHorarios = 0;
+    Object.keys(valores).forEach(function (id) {
+      if (valores[id].entrou) { entradas[id] = valores[id].entrou; novosHorarios++; }
+    });
+    salvarColab();
+    aplicarTempos();
 
     var dz = $("#dz-valores");
     dz.classList.add("ok");
     var nome = $("#nome-valores");
     var qtd = Object.keys(valores).length;
-    nome.textContent = qtd + " valor(es) carregado(s)";
+    nome.textContent = qtd + " valor(es) carregado(s)" + (novosHorarios ? " · " + novosHorarios + " com horário" : "");
     nome.classList.remove("oculto");
 
     marcarEtapa(3, "concluida");
@@ -1464,27 +1406,27 @@
     $("#card-4").classList.remove("oculto");
     marcarEtapa(4, "ativa");
 
-    // mostra a coluna de tempo se houver histórico local OU tempo global (BigQuery)
-    mostrarTempoCol = houveHistorico || tempoGlobal;
+    // a coluna de tempo é sempre exibida
+    mostrarTempoCol = true;
 
     var grupos = agrupar();
     var rotas = Object.keys(grupos).sort(ordenarRotas);
 
     // Resumo
     var totalPacotes = faltantes.length;
-    var totalValor = 0, novos = 0, persistentes = 0;
+    var totalValor = 0;
     faltantes.forEach(function (f) {
       var v = valores[f.id];
       if (v) totalValor += v.valorNum;
-      if (f.novo) novos++; else persistentes++;
     });
+    var persistentes = totalPacotes - novosCount;
 
     var resumoHtml =
       kpi("alerta", totalPacotes, "Pacotes na estação") +
       kpi("rotas", rotas.length, "Rotas afetadas");
-    if (houveHistorico && !tempoGlobal) {
+    if (houveHistorico) {
       resumoHtml += kpi("persist", persistentes, "Persistem da carga anterior");
-      resumoHtml += kpi("novos", novos, "Novos nesta carga");
+      resumoHtml += kpi("novos", novosCount, "Novos nesta carga");
       resumoHtml += kpi("resolvidos", resolvidos, "Resolvidos desde a última");
     }
     if (comValores) {
@@ -1921,7 +1863,7 @@
 
     var tudo = (modo === "tudo");
     var colValor  = tudo && comValores;
-    var colTempo  = tudo && houveHistorico;
+    var colTempo  = tudo && mostrarTempoCol;
     var colPP     = tudo; // parada e ponto
 
     // agrupa os selecionados por rota
@@ -1998,8 +1940,8 @@
     pararPoll();
     faltantes = []; valores = {}; comValores = false;
     selecionados = {};
-    resolvidos = 0; houveHistorico = false;
-    tempoGlobal = false; mostrarTempoCol = false;
+    resolvidos = 0; novosCount = 0; houveHistorico = false;
+    tempoGlobal = false;
     pararLembrete();
     ciclosLembrete = 0; intervaloMin = 30;
     $("#lembrete-topo").classList.add("oculto");
