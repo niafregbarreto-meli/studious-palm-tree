@@ -704,6 +704,7 @@
       <button class="btn btn-neutro" id="fechar-lembrete">Entendido</button>
     </div>
 
+    <div class="aviso oculto" id="aviso-planilha"></div>
     <div class="resumo" id="resumo"></div>
     <div class="destaques oculto" id="destaques"></div>
 
@@ -1043,14 +1044,33 @@
     }).format(new Date(ts));
   }
 
-  // Converte o horário em epoch ms absoluto. Se não trouxer fuso, assume
-  // São Paulo (-03:00), para que o tempo seja igual em qualquer máquina.
+  // Converte o horário em epoch ms absoluto. Aceita:
+  // - número serial do Google Sheets (dias desde 1899-12-30): os dígitos são
+  //   tratados como o horário de pt-SP (evita o fuso configurado na planilha
+  //   distorcer 1h ao ler com FORMATTED_VALUE).
+  // - string (CSV do BigQuery). Se não trouxer fuso, assume São Paulo (-03:00).
   function parseDataHora(txt) {
-    if (!txt) return 0;
-    var s = txt.toString().trim().replace(" ", "T");
+    if (txt === null || txt === undefined || txt === "") return 0;
+    if (typeof txt === "number") return serialSheetsParaEpoch(txt);
+    var s = txt.toString().trim();
+    if (/^\d+(\.\d+)?$/.test(s)) return serialSheetsParaEpoch(parseFloat(s));
+    s = s.replace(" ", "T");
     if (!/([+\-]\d{2}:?\d{2}|Z)$/.test(s)) s += "-03:00";
     var ms = Date.parse(s);
     return isNaN(ms) ? 0 : ms;
+  }
+
+  // Número serial do Sheets (dias desde 1899-12-30, naive) -> epoch ms,
+  // interpretando os dígitos como horário de São Paulo (-03:00, sem DST).
+  function serialSheetsParaEpoch(serial) {
+    if (!serial || isNaN(serial)) return 0;
+    var diasEpoch = 25569; // dias entre 1899-12-30 e 1970-01-01
+    var msNaive = Math.round((serial - diasEpoch) * 86400000);
+    var d = new Date(msNaive); // trata os dígitos como UTC só para extrair y/m/d/h/m/s
+    return Date.UTC(
+      d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(),
+      d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()
+    ) + 3 * 3600000; // esses y/m/d/h/m/s são o horário de SP; converte para epoch real
   }
 
   // ─── Modelo de tempo baseado em "entradas" (horário do BigQuery) ──
@@ -1298,10 +1318,25 @@
     function ler(aba) {
       var simples = /^[A-Za-z0-9_]+$/.test(aba);
       var ref = simples ? aba : ("'" + aba + "'");
-      return Grid.sheets.get(SHEET_ID, ref + "!A:D").then(function (data) {
+      // Tenta pegar o valor CRU (número serial), imune ao fuso configurado na
+      // planilha; se a rota direta falhar (proxy não repassa o parâmetro),
+      // cai para Grid.sheets.get (valor formatado).
+      return lerBruto(ref).catch(function () {
+        return Grid.sheets.get(SHEET_ID, ref + "!A:D");
+      }).then(function (data) {
         if (!data || !data.values || data.values.length < 2) throw new Error("aba vazia: " + aba);
         processarValoresLinhas(data.values);
       });
+    }
+
+    function lerBruto(ref) {
+      var m = location.pathname.match(/\/d\/([^\/]+)/);
+      var docId = m ? m[1] : "";
+      var qs = new URLSearchParams({
+        doc_id: docId, range: ref + "!A:D", valueRenderOption: "UNFORMATTED_VALUE"
+      });
+      return fetch("/api/v1/sheets/" + SHEET_ID + "?" + qs.toString())
+        .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
     }
 
     // 1) tenta descobrir uma aba de extração de nome simples (ASCII); 2) cai para SHEET_ABA
@@ -1494,12 +1529,24 @@
 
     // Resumo
     var totalPacotes = faltantes.length;
-    var totalValor = 0;
+    var totalValor = 0, semDado = 0;
     faltantes.forEach(function (f) {
       var v = valores[f.id];
-      if (v) totalValor += v.valorNum;
+      if (v) totalValor += v.valorNum; else if (comValores) semDado++;
     });
     var persistentes = totalPacotes - novosCount;
+
+    // Aviso: pacotes sem valor/conteúdo = ainda não estão na planilha/CSV de
+    // valores (extração desatualizada), não é erro do sistema.
+    var avisoEl = $("#aviso-planilha");
+    if (comValores && semDado > 0) {
+      avisoEl.classList.remove("oculto");
+      avisoEl.textContent = semDado + " pacote(s) ainda não aparecem na planilha de valores " +
+        "(provavelmente entraram na estação depois da última extração). Atualize a extração no " +
+        "Google Sheets e clique em \"Verificar agora\" para completá-los.";
+    } else {
+      avisoEl.classList.add("oculto");
+    }
 
     var resumoHtml =
       kpi("alerta", totalPacotes, "Pacotes na estação") +
@@ -2008,6 +2055,7 @@
     ciclosLembrete = 0; intervaloMin = 30;
     $("#lembrete-topo").classList.add("oculto");
     $("#banner-lembrete").classList.add("oculto");
+    $("#aviso-planilha").classList.add("oculto");
     $("#modal-fluxo").classList.add("oculto");
     $("#card-2").classList.add("oculto");
     $("#card-3").classList.add("oculto");
