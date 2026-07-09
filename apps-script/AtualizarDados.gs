@@ -3,20 +3,26 @@
  * "Extrair" manualmente).
  *
  * Substitui a extração manual do Connected Sheets: este script roda a
- * consulta diretamente no BigQuery (usando o serviço avançado "BigQuery",
- * com o acesso já delegado da sua conta) e escreve o resultado na aba
- * "DADOS" da mesma planilha, no formato que o index.html espera:
+ * consulta diretamente no BigQuery (via REST API + token OAuth do próprio
+ * script, SEM o serviço avançado "BigQuery" — esse serviço costuma falhar
+ * com "invalid authentication credentials" em projetos GCP "Padrão") e
+ * escreve o resultado na aba "DADOS" da mesma planilha, no formato que o
+ * index.html espera:
  *   SHP_SHIPMENT_ID | MOEDA_LOCAL | SHP_ITEM_DESC | ENTROU_STATION
  *
  * INSTALAÇÃO (uma vez):
  * 1. No editor de Apps Script (o mesmo projeto do Codigo.gs), adicione este
  *    arquivo: "+" ao lado de "Arquivos" → Script → cole este conteúdo.
- * 2. Ative o serviço avançado do BigQuery:
- *    Editor → ícone "+" ao lado de "Serviços" → BigQuery API → Adicionar.
+ * 2. Confirme que o appsscript.json tem "https://www.googleapis.com/auth/bigquery"
+ *    em oauthScopes (veja o comentário no index.html/README). NÃO precisa
+ *    ativar nenhum serviço avançado.
  * 3. Confirme/ajuste PROJECT_ID abaixo (o projeto do BigQuery a faturar —
  *    use "meli-bi-data" ou o projeto onde sua conta já tem cota).
  * 4. Execute uma vez a função `atualizarDadosBigQuery` manualmente pelo
- *    editor (▶ Executar) para autorizar os escopos pedidos.
+ *    editor (▶ Executar) para autorizar os escopos pedidos. Se já tinha
+ *    autorizado uma versão anterior, revogue o acesso em
+ *    myaccount.google.com/permissions e autorize de novo, para garantir que
+ *    o escopo do BigQuery seja concedido.
  * 5. Crie o gatilho automático: rode `criarGatilhoAtualizacao()` uma vez
  *    (ou Gatilhos → + Adicionar gatilho → função
  *    atualizarDadosBigQuery → baseado em tempo → a cada 30 minutos).
@@ -64,28 +70,49 @@ var SQL_VALORES = [
 /**
  * Roda a consulta no BigQuery e escreve o resultado na aba DADOS.
  * Chamada pelo gatilho automático (a cada 30 min) ou manualmente.
+ *
+ * NÃO usa o serviço avançado "BigQuery" (BigQuery.Jobs.*) — esse serviço
+ * exige que o projeto GCP vinculado ao script tenha a API habilitada
+ * explicitamente no Cloud Console, o que o projeto "Padrão" do Apps Script
+ * normalmente não permite (causa "invalid authentication credentials" mesmo
+ * com o escopo correto autorizado). Em vez disso, chamamos a API REST do
+ * BigQuery diretamente com o token OAuth do próprio script — mesma
+ * identidade que já tem acesso delegado ao BigQuery via Connected Sheets.
  */
 function atualizarDadosBigQuery() {
-  var request = { query: SQL_VALORES, useLegacySql: false };
-  var queryResults = BigQuery.Jobs.query(request, PROJECT_ID);
-  var jobId = queryResults.jobReference.jobId;
+  var token = ScriptApp.getOAuthToken();
+  var base = "https://bigquery.googleapis.com/bigquery/v2/projects/" + PROJECT_ID;
 
-  // aguarda o job terminar (poll simples)
-  while (!queryResults.jobComplete) {
+  function chamar(url, payload) {
+    var opts = {
+      method: payload ? "post" : "get",
+      contentType: "application/json",
+      headers: { Authorization: "Bearer " + token },
+      muteHttpExceptions: true
+    };
+    if (payload) opts.payload = JSON.stringify(payload);
+    var resp = UrlFetchApp.fetch(url, opts);
+    var json = JSON.parse(resp.getContentText());
+    if (json.error) throw new Error(JSON.stringify(json.error));
+    return json;
+  }
+
+  var json = chamar(base + "/queries", { query: SQL_VALORES, useLegacySql: false, timeoutMs: 30000 });
+  var jobRef = json.jobReference;
+
+  while (!json.jobComplete) {
     Utilities.sleep(1000);
-    queryResults = BigQuery.Jobs.getQueryResults(PROJECT_ID, jobId);
+    json = chamar(base + "/queries/" + jobRef.jobId);
   }
 
   var linhas = [["SHP_SHIPMENT_ID", "MOEDA_LOCAL", "SHP_ITEM_DESC", "ENTROU_STATION"]];
-  var rows = queryResults.rows || [];
-  rows.forEach(function (row) {
+  (json.rows || []).forEach(function (row) {
     linhas.push(row.f.map(function (cell) { return cell.v; }));
   });
 
-  // pagina se houver mais resultados
-  var pageToken = queryResults.pageToken;
+  var pageToken = json.pageToken;
   while (pageToken) {
-    var pagina = BigQuery.Jobs.getQueryResults(PROJECT_ID, jobId, { pageToken: pageToken });
+    var pagina = chamar(base + "/queries/" + jobRef.jobId + "?pageToken=" + encodeURIComponent(pageToken));
     (pagina.rows || []).forEach(function (row) {
       linhas.push(row.f.map(function (cell) { return cell.v; }));
     });
