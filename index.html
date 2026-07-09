@@ -1406,7 +1406,7 @@
 "    FROM `meli-bi-data.WHOWNER.BT_SHP_LG_SHIPMENTS`\n" +
 "    WHERE SHP_LG_STATUS = 'at_station'\n" +
 "      AND SHP_LG_SUB_STATUS = 'sorting'\n" +
-"      AND SHP_LG_LAST_UPDATED >= DATETIME(CURRENT_DATE('America/Sao_Paulo'))\n" +
+"      AND SHP_LG_LAST_UPDATED >= DATETIME_SUB(CURRENT_DATETIME('America/Sao_Paulo'), INTERVAL 3 DAY)\n" +
 "    GROUP BY 1\n" +
 ") ENTRADA ON ENTRADA.PCT = SHI.SHP_SHIPMENT_ID\n" +
 "WHERE SHI.SHP_SHIPMENT_ID IN (\n    " + listaIds + "\n);";

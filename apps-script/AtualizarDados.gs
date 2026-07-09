@@ -48,7 +48,7 @@ var SQL_VALORES = [
   "  SELECT SHP_SHIPMENT_ID AS PCT, MIN(SHP_LG_LAST_UPDATED) AS ENTROU",
   "  FROM `meli-bi-data.WHOWNER.BT_SHP_LG_SHIPMENTS`",
   "  WHERE SHP_LG_STATUS='at_station' AND SHP_LG_SUB_STATUS='sorting'",
-  "    AND SHP_LG_LAST_UPDATED >= DATETIME(CURRENT_DATE('America/Sao_Paulo'))",
+  "    AND SHP_LG_LAST_UPDATED >= DATETIME_SUB(CURRENT_DATETIME('America/Sao_Paulo'), INTERVAL 3 DAY)",
   "  GROUP BY 1",
   ")",
   "SELECT",
@@ -96,6 +96,13 @@ function atualizarDadosBigQuery() {
   var sh = ss.getSheetByName(ABA_DADOS);
   if (!sh) sh = ss.insertSheet(ABA_DADOS);
   sh.clearContents();
+  // Formata as colunas A (ID) e D (ENTROU_STATION) como TEXTO simples antes de
+  // escrever, para evitar que o Sheets detecte automaticamente algumas
+  // células como data/número e outras não (causa a inconsistência de "sai em
+  // uns pacotes e não em outros"). ID muito longo também não vira notação
+  // científica.
+  var linhasDados = Math.max(linhas.length, 2);
+  sh.getRange(1, 1, linhasDados, 4).setNumberFormat("@");
   if (linhas.length > 1) {
     sh.getRange(1, 1, linhas.length, linhas[0].length).setValues(linhas);
   } else {
