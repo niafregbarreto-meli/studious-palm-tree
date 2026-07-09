@@ -75,14 +75,34 @@ indisponível, a ferramenta volta ao histórico local automaticamente.
   sem esperar o contador, que continua correndo e sobrevive ao recarregar a
   página.
 
-## Busca automática de valores (opcional)
+## Busca automática de valores (hospedado no Grid)
 
-Para que o usuário só precise carregar os faltantes, preencha a constante
-`URL_VALORES_CSV` no início do `<script>` com a URL de um CSV publicado
-(planilha Q_BACKOFFICE conectada ao BigQuery → **Arquivo → Compartilhar →
-Publicar na web → CSV**). Quando preenchida, os valores são buscados
-automaticamente e as etapas 2 e 3 são puladas. Se a busca falhar, a ferramenta
-volta ao modo manual.
+Quando a ferramenta é hospedada no Grid, ela lê os valores direto de uma
+planilha Google via `Grid.sheets` (OAuth do dono, server-side — sem CORS, sem
+CSV manual). Configuração (`SHEET_ID` / `SHEET_ABA` no início do `<script>`):
+
+1. Conecte o Google em Grid (uma vez): `grid.adminml.com/google/auth/...`
+   — se o OAuth apontar para `grid.melioffice.com` e não abrir, tente de novo
+   com a VPN ativa.
+2. Use um nome de aba **simples, sem acentos ou espaços** (ex.: `DADOS`) —
+   nomes como "Extração 1" causam erro `Sheet range contains invalid
+   characters` no proxy de sheets do Grid.
+3. A aba deve ter as colunas `SHP_SHIPMENT_ID`, `MOEDA_LOCAL`,
+   `SHP_ITEM_DESC` e `ENTROU_STATION`.
+
+Quando `Grid.sheets` está disponível, o upload dos faltantes já traz valores e
+tempo prontos, pulando as etapas 2 e 3. Se a leitura falhar, cai para o CSV
+publicado (`URL_VALORES_CSV`, opcional) e depois para o modo manual.
+
+### Atualizar a aba DADOS automaticamente (sem clicar em "Extrair")
+
+O Connected Sheets do BigQuery não permite agendar a atualização da aba
+*extraída* — só da página conectada. Para eliminar o clique manual, use
+`apps-script/AtualizarDados.gs`: um gatilho de tempo que roda a consulta
+direto no BigQuery (serviço avançado BigQuery API) e escreve o resultado na
+aba `DADOS`. Instalação: veja os comentários no topo do arquivo — resumindo,
+cole o script no mesmo projeto Apps Script da planilha, ative o serviço
+avançado do BigQuery, e execute `criarGatilhoAtualizacao()` uma vez.
 
 ## Recomendação de atualização
 
