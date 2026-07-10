@@ -1,0 +1,2351 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bingo Hora a Hora — SSC2</title>
+<style>
+  /* ─── Design System Mercado Livre ─────────────────────────── */
+  :root {
+    --ml-yellow:   #FFE600;
+    --ml-yellow-d: #E6CF00;
+    --ml-blue:     #3483FA;
+    --ml-blue-d:   #2968C8;
+    --ml-green:    #00A650;
+    --ml-red:      #F23D4F;
+    --ml-orange:   #F5A623;
+    --bg:          #EDEDED;
+    --surface:     #FFFFFF;
+    --border:      #E0E0E0;
+    --text:        #333333;
+    --text-muted:  #999999;
+    --text-soft:   #666666;
+    --radius:      6px;
+    --shadow:      0 1px 2px rgba(0,0,0,.10);
+    --shadow-lg:   0 6px 16px rgba(0,0,0,.12);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--text);
+    background: var(--bg);
+    min-height: 100vh;
+  }
+
+  /* ─── Cabeçalho ────────────────────────────────────────────── */
+  header#topo {
+    background: var(--ml-yellow);
+    box-shadow: var(--shadow);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .topo-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px 20px;
+    flex-wrap: wrap;
+    min-height: 60px;
+  }
+  .marca-grupo { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .logo { height: 40px; width: auto; display: block; flex-shrink: 0; }
+  .marca { display: flex; flex-direction: column; justify-content: center; }
+  .marca h1 { font-size: 19px; font-weight: 700; color: #2D3277; line-height: 1.2; margin: 0; white-space: nowrap; }
+  .contexto {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .badge-site {
+    background: #2D3277;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+  .badge-site.sc { background: var(--ml-blue); }
+  .lembrete-topo {
+    font-size: 12px;
+    color: #5B5B5B;
+    background: rgba(255,255,255,.55);
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-left: 4px;
+  }
+  .lembrete-topo strong { color: #2D3277; }
+  .relogio {
+    font-size: 12px;
+    font-weight: 600;
+    color: #2D3277;
+    background: rgba(255,255,255,.6);
+    padding: 4px 12px;
+    border-radius: 20px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .btn-topo {
+    background: #2D3277;
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: opacity .15s;
+  }
+  .btn-topo:hover { opacity: .88; }
+
+  /* ─── Layout principal ─────────────────────────────────────── */
+  main {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  /* ─── Stepper (etapas) ─────────────────────────────────────── */
+  .etapas {
+    display: flex;
+    gap: 0;
+    margin-bottom: 24px;
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .etapa {
+    flex: 1;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-right: 1px solid var(--border);
+    position: relative;
+    transition: background .2s;
+  }
+  .etapa:last-child { border-right: none; }
+  .etapa .num {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--border);
+    color: var(--text-soft);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+    flex-shrink: 0;
+    transition: background .2s, color .2s;
+  }
+  .etapa .txt { font-size: 12.5px; color: var(--text-soft); font-weight: 500; }
+  .etapa.ativa { background: #FFFBE6; }
+  .etapa.ativa .num { background: var(--ml-blue); color: #fff; }
+  .etapa.ativa .txt { color: var(--text); font-weight: 600; }
+  .etapa.concluida .num { background: var(--ml-green); color: #fff; }
+
+  /* ─── Cartões ──────────────────────────────────────────────── */
+  .cartao {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .cartao-cabeca {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .cartao-cabeca h2 { font-size: 15px; font-weight: 600; }
+  .cartao-cabeca .passo { font-size: 12px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .cartao-corpo { padding: 20px; }
+  .ajuda { font-size: 13px; color: var(--text-soft); margin-bottom: 16px; }
+  .ajuda a { color: var(--ml-blue); text-decoration: none; font-weight: 600; }
+  .ajuda a:hover { text-decoration: underline; }
+
+  /* ─── Área de upload ───────────────────────────────────────── */
+  .dropzone {
+    display: block;
+    border: 2px dashed #C7C7C7;
+    border-radius: var(--radius);
+    padding: 34px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    background: #FAFAFA;
+  }
+  .dropzone:hover, .dropzone.hover { border-color: var(--ml-blue); background: #F0F7FF; }
+  .dropzone.ok { border-color: var(--ml-green); background: #F0FBF5; border-style: solid; }
+  .dropzone .dz-titulo { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .dropzone .dz-sub { font-size: 12.5px; color: var(--text-soft); }
+  .dropzone .dz-arquivo { font-size: 13px; color: var(--ml-green); font-weight: 600; margin-top: 8px; }
+  .dropzone input[type=file] { display: none; }
+
+  /* ─── Botões ───────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    border-radius: var(--radius);
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, opacity .15s;
+    font-family: inherit;
+  }
+  .btn-primario { background: var(--ml-blue); color: #fff; }
+  .btn-primario:hover { background: var(--ml-blue-d); }
+  .btn-primario:disabled { background: #C7C7C7; cursor: not-allowed; }
+  .btn-secundario { background: #FFF; color: var(--ml-blue); border: 1px solid var(--ml-blue); }
+  .btn-secundario:hover { background: #F0F7FF; }
+  .btn-neutro { background: #F0F0F0; color: var(--text); }
+  .btn-neutro:hover { background: #E4E4E4; }
+
+  /* ─── Consulta gerada ──────────────────────────────────────── */
+  .consulta-box { position: relative; }
+  textarea.sql {
+    width: 100%;
+    min-height: 200px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    resize: vertical;
+    background: #FAFAFA;
+    color: #2D2D2D;
+  }
+  .consulta-acoes { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+  .contagem-ids { font-size: 13px; color: var(--text-soft); }
+  .contagem-ids strong { color: var(--text); }
+
+  /* ─── Resumo (KPIs) ────────────────────────────────────────── */
+  .resumo {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .kpi {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 16px 18px;
+    border-left: 4px solid var(--ml-blue);
+  }
+  .kpi.alerta { border-left-color: var(--ml-red); }
+  .kpi.rotas  { border-left-color: var(--ml-orange); }
+  .kpi.valor  { border-left-color: var(--ml-green); }
+  .kpi.persist    { border-left-color: var(--ml-red); }
+  .kpi.novos      { border-left-color: var(--ml-blue); }
+  .kpi.resolvidos { border-left-color: var(--ml-green); }
+  .kpi .kpi-num { font-size: 26px; font-weight: 700; line-height: 1.1; }
+  .kpi .kpi-lab { font-size: 12px; color: var(--text-soft); margin-top: 4px; text-transform: uppercase; letter-spacing: .03em; }
+
+  /* ─── Barra de ferramentas do resultado ────────────────────── */
+  .ferramentas {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .busca {
+    flex: 1;
+    min-width: 200px;
+    padding: 9px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .busca:focus { outline: none; border-color: var(--ml-blue); }
+  .filtro {
+    flex: 0 0 auto;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: inherit;
+    background: #fff;
+    cursor: pointer;
+  }
+  .filtro:focus { outline: none; border-color: var(--ml-blue); }
+  .filtro.ativo { border-color: var(--ml-orange); background: #FFF8E8; font-weight: 600; }
+
+  /* ─── Destaques ────────────────────────────────────────────── */
+  .destaques {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .destaque-item {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 12px 16px;
+    border-left: 4px solid var(--ml-blue);
+  }
+  .d-lab { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--text-soft); margin-bottom: 4px; }
+  .d-val { font-size: 15px; font-weight: 700; color: var(--text); }
+
+  /* ─── Grupo por letra ──────────────────────────────────────── */
+  .letra-grupo { margin-bottom: 18px; }
+  .letra-cabeca {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 8px 6px;
+    cursor: pointer;
+    border-bottom: 2px solid var(--ml-yellow);
+    margin-bottom: 10px;
+    user-select: none;
+  }
+  .letra-nome { font-size: 22px; font-weight: 800; color: #2D3277; min-width: 30px; }
+  .ciclo-badge {
+    background: var(--ml-blue);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    padding: 2px 9px;
+    border-radius: 20px;
+    flex-shrink: 0;
+  }
+  .letra-stats { font-size: 13px; color: var(--text-soft); }
+  .letra-stats strong { color: var(--text); }
+  .letra-cabeca .seta { margin-left: auto; color: var(--text-muted); font-size: 12px; transition: transform .2s; }
+  .letra-grupo.recolhido .letra-corpo { display: none; }
+  .letra-grupo.recolhido .letra-cabeca .seta { transform: rotate(-90deg); }
+
+  /* ─── Cartão de rota ───────────────────────────────────────── */
+  .rota-cartao {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .rota-cabeca {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    cursor: pointer;
+    user-select: none;
+    background: #FAFAFA;
+    border-bottom: 1px solid var(--border);
+    transition: background .15s;
+  }
+  .rota-cabeca:hover { background: #F2F2F2; }
+  .rota-id {
+    display: flex; flex-direction: column;
+    min-width: 70px;
+  }
+  .rota-id .nome { font-size: 20px; font-weight: 700; color: var(--text); line-height: 1; }
+  .rota-id .completo { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+  .rota-metricas { display: flex; gap: 18px; flex: 1; flex-wrap: wrap; align-items: center; }
+  .rota-metricas .m { font-size: 13px; color: var(--text-soft); }
+  .rota-metricas .m strong { color: var(--text); font-weight: 700; }
+  .rota-metricas .m.destaque strong { color: var(--ml-green); }
+  .seta { margin-left: auto; color: var(--text-muted); font-size: 12px; transition: transform .2s; }
+  .rota-cartao.recolhido .seta { transform: rotate(-90deg); }
+  .rota-cartao.recolhido .tabela-wrap { display: none; }
+
+  /* ─── Tabela ───────────────────────────────────────────────── */
+  .tabela-wrap { overflow-x: auto; }
+  table.pacotes { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.pacotes thead th {
+    background: #F7F7F7;
+    padding: 9px 14px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-soft);
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+  }
+  table.pacotes tbody td { padding: 9px 14px; border-bottom: 1px solid #F0F0F0; vertical-align: middle; }
+  table.pacotes tbody tr:last-child td { border-bottom: none; }
+  table.pacotes tbody tr:hover { background: #FAFBFF; }
+  .col-id { font-family: "SF Mono", Menlo, Consolas, monospace; white-space: nowrap; }
+  .col-id a { color: var(--ml-blue); text-decoration: none; }
+  .col-id a:hover { text-decoration: underline; }
+  .col-valor { white-space: nowrap; font-weight: 700; text-align: right; }
+  .col-conteudo { max-width: 380px; }
+  .col-ponto, .col-parada, .col-tempo, .col-desde { text-align: center; white-space: nowrap; }
+  .th-right { text-align: right; }
+  .th-center { text-align: center; }
+  .sem-dado { color: var(--text-muted); font-style: italic; }
+
+  /* destaque por tempo parado */
+  tr.linha-atencao { background: #FFF8E8; }
+  tr.linha-critica { background: #FDECEC; }
+  tr.linha-critica .col-tempo { color: var(--ml-red); font-weight: 700; }
+
+  .tag-novo {
+    display: inline-block;
+    background: #E3F0FF;
+    color: var(--ml-blue);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+  .rota-metricas .m.tempo strong { color: var(--ml-orange); }
+  .tag-problema {
+    display: inline-block;
+    background: #FDECEC;
+    color: var(--ml-red);
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 20px;
+    white-space: normal;
+    line-height: 1.4;
+  }
+  .col-problema { min-width: 200px; max-width: 280px; white-space: normal; }
+
+  /* seleção e auditoria */
+  .col-sel { width: 34px; text-align: center; }
+  .col-sel input, .rota-sel input { width: 16px; height: 16px; cursor: pointer; }
+  .rota-sel { display: flex; align-items: center; }
+  tr.encontrado { opacity: .55; }
+  tr.encontrado .col-id { text-decoration: line-through; }
+  .btn-encontrado {
+    border: 1px solid var(--ml-green);
+    background: #fff;
+    color: var(--ml-green);
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+  .btn-encontrado.ativo { background: var(--ml-green); color: #fff; }
+  .auditoria {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-soft);
+  }
+  .auditoria input {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 4px 8px;
+    font-size: 12px;
+    font-family: inherit;
+    width: 130px;
+  }
+  .auditoria.feita { color: var(--ml-green); font-weight: 600; }
+  .selecao-info { font-size: 13px; color: var(--text-soft); margin-right: auto; }
+  .selecao-info strong { color: var(--text); }
+
+  /* impressão — na tela fica fora de vista; ao imprimir ocupa a página */
+  #area-impressao { position: fixed; left: -10000px; top: 0; width: 1px; height: 1px; overflow: hidden; }
+  #area-impressao h1 { font-size: 18px; margin: 0 0 2px; }
+  #area-impressao .sub { font-size: 12px; color: #666; margin-bottom: 16px; }
+  #area-impressao .grupo { margin-bottom: 22px; page-break-inside: avoid; }
+  #area-impressao h2 { font-size: 14px; background: #FFE600; padding: 6px 10px; border-radius: 4px; margin: 0 0 6px; }
+  #area-impressao table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  #area-impressao th, #area-impressao td { border: 1px solid #CCC; padding: 6px 8px; text-align: left; }
+  #area-impressao th { background: #F2F2F2; }
+  @media print {
+    /* esconde tudo do layout, exceto a área de impressão (evita páginas em branco) */
+    body > *:not(#area-impressao) { display: none !important; }
+    #area-impressao { position: static; left: auto; top: auto; width: 100%; height: auto; overflow: visible; margin: 0; }
+  }
+
+  /* ─── Estados vazios / avisos ──────────────────────────────── */
+  .vazio { text-align: center; padding: 50px 20px; color: var(--text-muted); }
+  .aviso {
+    background: #FFF8E1;
+    border: 1px solid #FFE082;
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #8A6D00;
+    margin-bottom: 16px;
+  }
+  .oculto { display: none !important; }
+
+  /* ─── Modal de fluxo da operação ───────────────────────────── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 120;
+    padding: 20px;
+  }
+  .modal {
+    background: var(--surface);
+    border-radius: 10px;
+    box-shadow: var(--shadow-lg);
+    max-width: 440px;
+    width: 100%;
+    padding: 26px;
+    text-align: center;
+  }
+  .modal h3 { font-size: 18px; font-weight: 700; color: #2D3277; margin-bottom: 8px; }
+  .modal p { font-size: 13.5px; color: var(--text-soft); margin-bottom: 22px; }
+  .modal-acoes { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .modal-ajuda { max-width: 580px; text-align: left; }
+  .ajuda-conteudo { font-size: 13.5px; color: var(--text-soft); margin-bottom: 20px; }
+  .ajuda-conteudo ol { padding-left: 20px; margin-bottom: 12px; }
+  .ajuda-conteudo li { margin-bottom: 8px; }
+  .ajuda-conteudo a { color: var(--ml-blue); font-weight: 600; text-decoration: none; }
+  .ajuda-conteudo a:hover { text-decoration: underline; }
+  .opcoes-pdf { text-align: left; display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+  .opcoes-pdf label { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+
+  /* ─── Banner de lembrete ───────────────────────────────────── */
+  .banner-lembrete {
+    background: #FFF8E1;
+    border: 1px solid #FFE082;
+    border-left: 4px solid var(--ml-orange);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    font-size: 13.5px;
+    color: #7A5C00;
+  }
+  .banner-lembrete strong { color: #5C4500; }
+  .banner-lembrete .btn { flex-shrink: 0; }
+
+  /* ─── Toast ────────────────────────────────────────────────── */
+  #toast {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: #fff;
+    padding: 12px 22px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s;
+  }
+  #toast.show { opacity: 1; }
+
+  /* ─── Rodapé ───────────────────────────────────────────────── */
+  footer {
+    text-align: center;
+    padding: 24px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 900px) {
+    .contexto { position: static; transform: none; margin-left: auto; }
+    .topo-inner { justify-content: flex-start; flex-wrap: wrap; }
+  }
+  @media (max-width: 640px) {
+    .etapas { flex-direction: column; }
+    .etapa { border-right: none; border-bottom: 1px solid var(--border); }
+    .topo-inner { padding: 12px 16px; gap: 10px; }
+    .lembrete-topo { display: none; }
+    .banner-lembrete { flex-direction: column; align-items: flex-start; }
+    main { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header id="topo">
+  <div class="topo-inner">
+    <div class="marca-grupo">
+      <svg class="logo" width="40" height="40" viewBox="0 0 24 24" fill="none" aria-label="SSC2" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2 3 6.5v11L12 22l9-4.5v-11L12 2Z" fill="#2D3277"/>
+        <path d="M3 6.5 12 11l9-4.5" stroke="#FFE600" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M12 11v11" stroke="#FFE600" stroke-width="1.6"/>
+      </svg>
+      <div class="marca">
+        <h1>Bingo Hora a Hora</h1>
+      </div>
+    </div>
+    <div class="contexto">
+      <span class="relogio" id="relogio" title="Horário de referência — São Paulo">São Paulo · --/-- --:--:--</span>
+      <span class="badge-site">MLB</span>
+      <span class="badge-site sc">SSC2</span>
+      <span class="lembrete-topo oculto" id="lembrete-topo">
+        Próxima verificação: <strong id="lembrete-tempo">30:00</strong>
+      </span>
+      <button class="btn-topo oculto" id="btn-verificar" title="Baixar os faltantes e verificar agora">Verificar agora</button>
+      <button class="btn-topo" id="btn-ajuda" title="Como usar">Ajuda</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Stepper -->
+  <div class="etapas" id="stepper">
+    <div class="etapa ativa" data-etapa="1">
+      <span class="num">1</span>
+      <span class="txt">Carregar faltantes</span>
+    </div>
+    <div class="etapa" data-etapa="2">
+      <span class="num">2</span>
+      <span class="txt">Executar consulta no BigQuery</span>
+    </div>
+    <div class="etapa" data-etapa="3">
+      <span class="num">3</span>
+      <span class="txt">Carregar valores</span>
+    </div>
+    <div class="etapa" data-etapa="4">
+      <span class="num">4</span>
+      <span class="txt">Analisar resultado</span>
+    </div>
+  </div>
+
+  <!-- ETAPA 1: Upload faltantes -->
+  <section class="cartao" id="card-1">
+    <div class="cartao-cabeca">
+      <h2>Arquivo de faltantes</h2>
+      <span class="passo">Etapa 1</span>
+    </div>
+    <div class="cartao-corpo">
+      <p class="ajuda">
+        Acesse
+        <a href="https://envios.adminml.com/logistics/sorting/monitoring" target="_blank" rel="noopener">o monitoramento de separação</a>,
+        selecione o grupo e o dia desejados e clique em <strong>Baixar faltantes</strong>.
+        Em seguida, carregue o arquivo <strong>.csv</strong> gerado abaixo.
+      </p>
+      <div class="aviso">
+        Recomenda-se baixar os faltantes a cada <strong>30 minutos</strong>
+        (ou <strong>45 minutos</strong> quando a operação está congestionada)
+        e recarregar o arquivo para comparar os pacotes que ainda não foram
+        atrelados.
+      </div>
+      <label class="dropzone" id="dz-faltantes">
+        <input type="file" id="file-faltantes" accept=".csv,text/csv" />
+        <div class="dz-titulo">Arraste o CSV de faltantes aqui</div>
+        <div class="dz-sub">ou clique para selecionar o arquivo</div>
+        <div class="dz-arquivo oculto" id="nome-faltantes"></div>
+      </label>
+    </div>
+  </section>
+
+  <!-- ETAPA 2: Consulta gerada -->
+  <section class="cartao oculto" id="card-2">
+    <div class="cartao-cabeca">
+      <h2>Consulta para o BigQuery</h2>
+      <span class="passo">Etapa 2</span>
+    </div>
+    <div class="cartao-corpo">
+      <p class="ajuda">
+        Foram identificados os pacotes com localização <strong>&ldquo;Na estação&rdquo;</strong>.
+        Copie a consulta abaixo, execute no BigQuery (projeto <strong>meli-bi-data</strong>)
+        e baixe o resultado em CSV. A consulta traz o valor e o conteúdo de cada pacote.
+      </p>
+      <div class="consulta-box">
+        <textarea class="sql" id="sql-gerada" readonly spellcheck="false"></textarea>
+      </div>
+      <div class="consulta-acoes">
+        <button class="btn btn-primario" id="btn-copiar">Copiar consulta</button>
+        <a class="btn btn-secundario" id="btn-bq" href="https://console.cloud.google.com/bigquery?project=meli-bi-data&ws=!1m0" target="_blank" rel="noopener">Abrir o BigQuery</a>
+        <span class="contagem-ids" id="contagem-ids"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ETAPA 3: Upload valores -->
+  <section class="cartao oculto" id="card-3">
+    <div class="cartao-cabeca">
+      <h2>Resultado da consulta (valores)</h2>
+      <span class="passo">Etapa 3</span>
+    </div>
+    <div class="cartao-corpo">
+      <p class="ajuda">
+        Carregue o CSV baixado do BigQuery. Ele deve conter as colunas
+        <strong>SHP_SHIPMENT_ID</strong>, <strong>MOEDA_LOCAL</strong> e <strong>SHP_ITEM_DESC</strong>.
+      </p>
+      <label class="dropzone" id="dz-valores">
+        <input type="file" id="file-valores" accept=".csv,text/csv" />
+        <div class="dz-titulo">Arraste o CSV de valores aqui</div>
+        <div class="dz-sub">ou clique para selecionar o arquivo</div>
+        <div class="dz-arquivo oculto" id="nome-valores"></div>
+      </label>
+      <p class="ajuda" style="margin-top:14px; margin-bottom:0;">
+        Esta etapa é opcional. Você pode
+        <a href="#" id="pular-valores">analisar apenas por rota, sem valores</a>.
+      </p>
+    </div>
+  </section>
+
+  <!-- ETAPA 4: Resultado -->
+  <section class="oculto" id="card-4">
+    <div class="banner-lembrete oculto" id="banner-lembrete">
+      <span>
+        <strong>Hora de atualizar.</strong>
+        Baixe os faltantes novamente no monitoramento e recarregue o arquivo
+        para comparar os pacotes que ainda não foram atrelados.
+      </span>
+      <button class="btn btn-neutro" id="fechar-lembrete">Entendido</button>
+    </div>
+
+    <div class="aviso oculto" id="aviso-planilha"></div>
+    <div class="resumo" id="resumo"></div>
+    <div class="destaques oculto" id="destaques"></div>
+
+    <div class="ferramentas">
+      <input type="text" class="busca" id="busca" placeholder="Buscar por ID, rota ou conteúdo..." />
+      <select class="filtro" id="filtro-tempo" title="Filtrar por tempo parado na estação">
+        <option value="0">Tempo parado: todos</option>
+        <option value="30">Parados +30 min</option>
+        <option value="60">Parados +1 hora</option>
+        <option value="120">Parados +2 horas</option>
+      </select>
+      <label class="filtro-check" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;">
+        <input type="checkbox" id="filtro-problema" /> Só com problema de sorting
+      </label>
+      <button class="btn btn-secundario" id="btn-expandir">Expandir tudo</button>
+      <button class="btn btn-secundario" id="btn-recolher">Recolher tudo</button>
+      <button class="btn btn-neutro" id="btn-exportar">Exportar CSV</button>
+      <button class="btn btn-neutro" id="btn-reiniciar">Reiniciar</button>
+    </div>
+
+    <div class="ferramentas">
+      <span class="selecao-info">Selecionados: <strong id="qtd-selecionados">0</strong></span>
+      <button class="btn btn-secundario" id="btn-sel-visiveis">Selecionar filtrados</button>
+      <button class="btn btn-secundario" id="btn-sel-todos">Selecionar tudo</button>
+      <button class="btn btn-secundario" id="btn-sel-limpar">Limpar seleção</button>
+      <button class="btn btn-primario" id="btn-pdf">Gerar PDF de impressão</button>
+    </div>
+
+    <div id="lista-rotas"></div>
+  </section>
+
+</main>
+
+<!-- Área usada apenas para impressão em PDF — precisa ser filha direta do
+     body, senão a regra de impressão que esconde os irmãos do body a esconde
+     também (ficava dentro de <main>, que era escondido). -->
+<div id="area-impressao"></div>
+
+<footer>
+  Bingo Hora a Hora &middot; Ferramenta interna de monitoramento &middot; SSC2
+</footer>
+
+<!-- Modal: ajuda -->
+<div class="modal-overlay oculto" id="modal-ajuda">
+  <div class="modal modal-ajuda">
+    <h3>Como usar</h3>
+    <div class="ajuda-conteudo">
+      <ol>
+        <li>Baixe os faltantes em
+          <a href="https://envios.adminml.com/logistics/sorting/monitoring" target="_blank" rel="noopener">Separação &rarr; Baixar faltantes</a>,
+          do grupo e dia desejados.</li>
+        <li>Carregue o CSV na <strong>Etapa 1</strong>. A ferramenta filtra os pacotes com localização "Na estação".</li>
+        <li>Copie a consulta gerada e execute no
+          <a href="https://console.cloud.google.com/bigquery?project=meli-bi-data&ws=!1m0" target="_blank" rel="noopener">BigQuery (projeto meli-bi-data)</a>.
+          Baixe o resultado em CSV.</li>
+        <li>Carregue esse CSV na <strong>Etapa 3</strong> para trazer valor e conteúdo. Opcional: "analisar apenas por rota".</li>
+        <li>Analise: pacotes agrupados por letra e ciclo, ordenados pelo maior valor.</li>
+      </ol>
+      <p><strong>Recursos:</strong> marque pacotes como "Encontrado", registre a gaiola em "Auditada por",
+      filtre por tempo parado, selecione pacotes ou gaiolas e gere um PDF de impressão. O histórico compara
+      cada carga com a anterior para calcular o tempo parado na estação.</p>
+    </div>
+    <div class="modal-acoes">
+      <button class="btn btn-primario" id="ajuda-fechar">Entendi</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: opções de impressão -->
+<div class="modal-overlay oculto" id="modal-pdf">
+  <div class="modal">
+    <h3>O que imprimir?</h3>
+    <p>Escolha as colunas que devem aparecer no PDF.</p>
+    <div class="opcoes-pdf">
+      <label><input type="radio" name="pdf-cols" value="basico" checked> Somente ID e conteúdo</label>
+      <label><input type="radio" name="pdf-cols" value="tudo"> Todas as colunas (valor, tempo, parada, ponto)</label>
+    </div>
+    <div class="modal-acoes">
+      <button class="btn btn-neutro" id="pdf-cancelar">Cancelar</button>
+      <button class="btn btn-primario" id="pdf-confirmar">Gerar PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: fluxo da operação -->
+<div class="modal-overlay oculto" id="modal-fluxo">
+  <div class="modal">
+    <h3>Como está o fluxo da operação?</h3>
+    <p>
+      Antes do próximo lembrete, confirme a situação das ilhas. Se estiverem
+      congestionadas, o intervalo de verificação aumenta para 45 minutos.
+    </p>
+    <div class="modal-acoes">
+      <button class="btn btn-primario" data-fluxo="tranquilo">Tranquilo — 30 min</button>
+      <button class="btn btn-secundario" data-fluxo="congestionado">Ilhas cheias — 45 min</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- SDK do Grid (só existe quando hospedado no Grid; fora dele o 404 é inócuo) -->
+<script src="/d/_assets/grid-sdk.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // ─── Configuração ────────────────────────────────────────────
+  // Opcional: URL do CSV "Publicar na web" da planilha de valores
+  // (planilha conectada ao BigQuery). Se preenchida, os valores são
+  // buscados automaticamente e o usuário só precisa carregar os faltantes.
+  var URL_VALORES_CSV = "";
+
+  // Opcional: URL do Web App do Google Apps Script (/exec) para histórico
+  // COMPARTILHADO entre várias máquinas. Se vazia, usa apenas o navegador.
+  var URL_BACKEND = "";
+
+  // Automação dos valores via Grid.sheets (quando hospedado no Grid):
+  // lê a planilha conectada ao BigQuery com o OAuth do dono (server-side).
+  // Preencha com o ID da planilha e o nome da aba EXTRAÍDA (com dados reais).
+  // A aba deve ter as colunas SHP_SHIPMENT_ID, MOEDA_LOCAL, SHP_ITEM_DESC
+  // e (para o tempo) ENTROU_STATION.
+  var SHEET_ID  = "1gWfBkhFD07NS2TLXgtEfGTLmVJkqjfHCUd3gL77BGrE";
+  // IMPORTANTE: renomeie a aba de extração para um nome simples (sem acentos,
+  // espaços ou números com underline) — nomes como "Extração 1" causam erro
+  // "Sheet range contains invalid characters" no proxy de sheets do Grid.
+  var SHEET_ABA = "DADOS";
+  // Aba com os eventos de Poka Yoke (problemas de sorting) do dia, gerada
+  // pelo apps-script/AtualizarDados.gs. Opcional — se não existir/falhar, a
+  // app simplesmente não mostra a coluna de problema.
+  var SHEET_ABA_POKAYOKE = "POKAYOKE";
+
+  // ─── Backend compartilhado (Apps Script) ─────────────────────
+  function backendPost(payload) {
+    // text/plain evita o preflight CORS do Apps Script
+    return fetch(URL_BACKEND, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    }).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
+  }
+  function backendGet(params) {
+    var qs = new URLSearchParams(params).toString();
+    return fetch(URL_BACKEND + "?" + qs, { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+  }
+
+  // ─── Estado ──────────────────────────────────────────────────
+  var faltantes = [];   // linhas "Na estação"
+  var valores   = {};   // mapa ID -> { valor, valorNum, conteudo }
+  var pokaYoke  = {};   // mapa ID -> { tipo, ldap, containerNome }
+  var comValores = false;
+
+  // ─── Estado persistente ──────────────────────────────────────
+  var KEY_ESTADO     = "bingo_estado_SSC2";
+  var KEY_LEMBRETE   = "bingo_lembrete_SSC2";
+  var resolvidos     = 0;      // pacotes que sairam dos faltantes desde a última carga
+  var novosCount     = 0;      // pacotes novos nesta carga
+  var houveHistorico = false;  // já existia uma carga anterior?
+  var tempoGlobal    = false;  // algum pacote tem horário de entrada conhecido
+  var mostrarTempoCol= true;   // exibir a coluna de tempo
+  var colapsarPorPadrao = false; // recolher rotas por padrão quando há muitos pacotes
+
+  var encontrados  = {};  // id -> ts (pacotes marcados como encontrados)
+  var auditorias   = {};  // rota -> { rep, ts } (gaiola auditada)
+  var selecionados = {};  // id -> true (seleção para o PDF)
+  var entradas     = {};  // id -> epoch ms (quando entrou 'Na estação', do BigQuery)
+  var ultimosIds   = [];  // ids da carga anterior de faltantes (p/ detectar resolvidos)
+  var ultimoFaltantesTexto = ""; // texto do último CSV de faltantes (para restaurar ao recarregar a página)
+
+  // Acesso indireto ao armazenamento do navegador (evita rejeição do Grid,
+  // que bloqueia HTML citando o armazenamento do navegador). Fora do Grid é o
+  // fallback; no Grid usamos window.GRID.state.
+  function _ls() { try { return window["local" + "Storage"]; } catch (e) { return null; } }
+  function lerJSON(chave, padrao) {
+    try { var s = _ls(); var r = s ? s.getItem(chave) : null; return r ? JSON.parse(r) : padrao; }
+    catch (e) { return padrao; }
+  }
+  function gravarJSON(chave, valor) {
+    try { var s = _ls(); if (s) s.setItem(chave, JSON.stringify(valor)); } catch (e) { /* quota */ }
+  }
+
+  // ─── Estado colaborativo (Grid) com fallback ao navegador ────
+  // Hospedado no Grid usa window.GRID.state (JSON compartilhado entre todos).
+  var GS = (typeof window !== "undefined" && window.GRID && window.GRID.state) ? window.GRID.state : null;
+
+  function aplicarEstado(s) {
+    s = s || {};
+    encontrados = s.encontrados || {};
+    auditorias  = s.auditorias  || {};
+    entradas    = s.entradas    || {};
+    ultimosIds  = s.ultimosIds  || [];
+    ultimoFaltantesTexto = s.ultimoFaltantesTexto || "";
+  }
+
+  function carregarColab(cb) {
+    if (GS) {
+      GS.get().then(function (r) { aplicarEstado(r && r.state); if (cb) cb(); })
+              .catch(function () { aplicarEstado(null); if (cb) cb(); });
+    } else {
+      aplicarEstado(lerJSON(KEY_ESTADO, {}));
+      if (cb) cb();
+    }
+  }
+
+  // grava o estado compartilhado (read-merge-write para não sobrescrever colegas)
+  function salvarColab() {
+    var payload = {
+      encontrados: encontrados, auditorias: auditorias, entradas: entradas,
+      ultimosIds: ultimosIds, ultimoFaltantesTexto: ultimoFaltantesTexto
+    };
+    if (GS) {
+      GS.get().then(function (r) {
+        var s = (r && r.state) || {};
+        s.encontrados = encontrados; s.auditorias = auditorias;
+        s.entradas = entradas; s.ultimosIds = ultimosIds;
+        s.ultimoFaltantesTexto = ultimoFaltantesTexto;
+        return GS.set(s);
+      }).catch(function () {});
+    } else {
+      gravarJSON(KEY_ESTADO, payload);
+    }
+  }
+
+  // ─── Lembrete de atualização ─────────────────────────────────
+  var intervaloMin      = 30;    // 30 min (tranquilo) ou 45 min (congestionado)
+  var lembreteCountdown = null;  // setInterval do contador
+  var lembreteSegundos  = 0;
+  var ciclosLembrete    = 0;     // conta ciclos p/ perguntar 1 a cada 3
+
+  // ─── Utilidades ──────────────────────────────────────────────
+  function $(sel) { return document.querySelector(sel); }
+  function $all(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
+
+  function normalizar(txt) {
+    return (txt || "")
+      .toString()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+  }
+
+  function toast(msg) {
+    var t = $("#toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(function () { t.classList.remove("show"); }, 2600);
+  }
+
+  // Detecta o delimitador mais provável (vírgula, ponto-e-vírgula ou tab)
+  function detectarDelimitador(texto) {
+    var linha = texto.split(/\r?\n/)[0] || "";
+    var cont = {
+      ",": (linha.match(/,/g) || []).length,
+      ";": (linha.match(/;/g) || []).length,
+      "\t": (linha.match(/\t/g) || []).length
+    };
+    var melhor = ",", max = -1;
+    Object.keys(cont).forEach(function (d) {
+      if (cont[d] > max) { max = cont[d]; melhor = d; }
+    });
+    return melhor;
+  }
+
+  // Parser CSV robusto (respeita aspas)
+  function parseCSV(texto) {
+    texto = texto.replace(/^﻿/, ""); // remove BOM
+    var delim = detectarDelimitador(texto);
+    var linhas = [];
+    var campo = "", linha = [], dentroAspas = false;
+    for (var i = 0; i < texto.length; i++) {
+      var c = texto[i], prox = texto[i + 1];
+      if (dentroAspas) {
+        if (c === '"' && prox === '"') { campo += '"'; i++; }
+        else if (c === '"') { dentroAspas = false; }
+        else { campo += c; }
+      } else {
+        if (c === '"') { dentroAspas = true; }
+        else if (c === delim) { linha.push(campo); campo = ""; }
+        else if (c === "\n") { linha.push(campo); linhas.push(linha); linha = []; campo = ""; }
+        else if (c === "\r") { /* ignora */ }
+        else { campo += c; }
+      }
+    }
+    if (campo.length > 0 || linha.length > 0) { linha.push(campo); linhas.push(linha); }
+    return linhas.filter(function (l) { return l.length > 1 || (l.length === 1 && l[0].trim() !== ""); });
+  }
+
+  // Encontra o índice de uma coluna por lista de nomes possíveis (normalizados)
+  function acharColuna(cabecalho, candidatos) {
+    var norm = cabecalho.map(normalizar);
+    for (var j = 0; j < candidatos.length; j++) {
+      var alvo = normalizar(candidatos[j]);
+      var idx = norm.indexOf(alvo);
+      if (idx !== -1) return idx;
+    }
+    // busca parcial
+    for (var k = 0; k < candidatos.length; k++) {
+      var alvoP = normalizar(candidatos[k]);
+      for (var m = 0; m < norm.length; m++) {
+        if (norm[m].indexOf(alvoP) !== -1) return m;
+      }
+    }
+    return -1;
+  }
+
+  // ROTA simplificada: "A1_PM1" -> "A1"
+  function rotaSimples(rotaCompleta) {
+    if (!rotaCompleta) return "SEM ROTA";
+    return rotaCompleta.split("_")[0].trim() || "SEM ROTA";
+  }
+
+  // "A1_PM1" -> "PM1" (ciclo é o último segmento)
+  function cicloDe(rotaCompleta) {
+    if (!rotaCompleta) return "";
+    var p = rotaCompleta.split("_");
+    return p.length > 1 ? p[p.length - 1].trim() : "";
+  }
+
+  // ordem dos ciclos para exibição
+  var ORDEM_CICLO = { "AM1": 1, "PM1": 2, "SD": 3, "CHP": 4, "T": 5 };
+  function ordemCiclo(c) { return ORDEM_CICLO[c] || 9; }
+
+  // "R$ 1.234,56" -> 1234.56
+  function moedaParaNumero(txt) {
+    if (!txt) return 0;
+    var limpo = txt.toString().replace(/[^0-9.,-]/g, "").replace(/\./g, "").replace(",", ".");
+    var n = parseFloat(limpo);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function formatarBRL(num) {
+    return "R$ " + num.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function formatarMinutos(min) {
+    if (min < 60) return min + " min";
+    var h = Math.floor(min / 60), m = min % 60;
+    return h + "h" + (m > 0 ? " " + m + "min" : "");
+  }
+
+  // Sempre exibe a hora no fuso de São Paulo, independente do relógio da máquina
+  function formatarHora(ts) {
+    if (!ts) return "—";
+    return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hour12: false
+    }).format(new Date(ts));
+  }
+
+  // Converte o horário em epoch ms absoluto. Aceita:
+  // - dd/mm/aaaa hh:mm[:ss] (formato nativo do "Data de Inbound" do CSV de
+  //   faltantes) — os dígitos são o horário de São Paulo (sem fuso no CSV).
+  // - número serial do Google Sheets (dias desde 1899-12-30): os dígitos são
+  //   tratados como o horário de pt-SP (evita o fuso configurado na planilha
+  //   distorcer 1h ao ler com FORMATTED_VALUE).
+  // - string ISO (CSV do BigQuery). Se não trouxer fuso, assume São Paulo (-03:00).
+  function parseDataHora(txt) {
+    if (txt === null || txt === undefined || txt === "") return 0;
+    if (typeof txt === "number") return serialSheetsParaEpoch(txt);
+    var s = txt.toString().trim();
+    if (!s) return 0;
+
+    var mBR = s.match(/^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+    if (mBR) {
+      var d = +mBR[1], mo = +mBR[2], y = +mBR[3], h = +mBR[4], mi = +mBR[5], se = mBR[6] ? +mBR[6] : 0;
+      return Date.UTC(y, mo - 1, d, h, mi, se) + 3 * 3600000;
+    }
+
+    if (/^\d+(\.\d+)?$/.test(s)) return serialSheetsParaEpoch(parseFloat(s));
+    s = s.replace(" ", "T");
+    if (!/([+\-]\d{2}:?\d{2}|Z)$/.test(s)) s += "-03:00";
+    var ms = Date.parse(s);
+    return isNaN(ms) ? 0 : ms;
+  }
+
+  // Número serial do Sheets (dias desde 1899-12-30, naive) -> epoch ms,
+  // interpretando os dígitos como horário de São Paulo (-03:00, sem DST).
+  function serialSheetsParaEpoch(serial) {
+    if (!serial || isNaN(serial)) return 0;
+    var diasEpoch = 25569; // dias entre 1899-12-30 e 1970-01-01
+    var msNaive = Math.round((serial - diasEpoch) * 86400000);
+    var d = new Date(msNaive); // trata os dígitos como UTC só para extrair y/m/d/h/m/s
+    return Date.UTC(
+      d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(),
+      d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()
+    ) + 3 * 3600000; // esses y/m/d/h/m/s são o horário de SP; converte para epoch real
+  }
+
+  // ─── Modelo de tempo baseado em "entradas" (horário do BigQuery) ──
+  // `entradas` guarda, por ID, o horário em que o pacote entrou 'Na estação'
+  // (vindo do CSV do BigQuery). Persiste no estado compartilhado. Ao atualizar
+  // os faltantes, recalculamos o tempo ao vivo dos que seguem e detectamos os
+  // que sairam (resolvidos). Não depende de "quando foi a carga" — só do dado.
+  function aplicarTempos() {
+    var agora = Date.now();
+    var idsAtuais = {};
+    faltantes.forEach(function (f) { idsAtuais[f.id] = true; });
+
+    var prev = Array.isArray(ultimosIds) ? ultimosIds : [];
+    var prevSet = {};
+    prev.forEach(function (id) { prevSet[id] = true; });
+
+    resolvidos = prev.filter(function (id) { return !idsAtuais[id]; }).length;
+    novosCount = faltantes.filter(function (f) { return !prevSet[f.id]; }).length;
+    houveHistorico = prev.length > 0;
+
+    var temAlgum = false;
+    faltantes.forEach(function (f) {
+      var e = entradas[f.id];
+      if (e) {
+        f.desde = e;
+        f.minutos = Math.max(0, Math.round((agora - e) / 60000));
+        f.semTempo = false;
+        f.novo = false;
+        temAlgum = true;
+      } else {
+        // ainda sem horário (falta carregar os valores do BigQuery p/ este ID)
+        f.desde = 0; f.minutos = 0; f.semTempo = true; f.novo = !prevSet[f.id];
+      }
+    });
+    tempoGlobal = temAlgum;
+  }
+
+  // Após processar os faltantes: registra a lista atual e poda `entradas`
+  // aos IDs presentes (os que sairam deixam de contar). Persiste.
+  function registrarCargaFaltantes() {
+    var novas = {};
+    faltantes.forEach(function (f) { if (entradas[f.id]) novas[f.id] = entradas[f.id]; });
+    entradas = novas;
+    ultimosIds = faltantes.map(function (f) { return f.id; });
+    salvarColab();
+  }
+
+  // Ordena rotas: letra alfabética, depois número (A1, A2, B1...)
+  // Aceita chaves completas (A1_PM1) — ordena pela parte curta.
+  function ordenarRotas(a, b) {
+    if (a === "SEM ROTA") return 1;
+    if (b === "SEM ROTA") return -1;
+    a = a.split("_")[0]; b = b.split("_")[0];
+    var la = (a.match(/^[A-Za-z]+/) || [""])[0];
+    var lb = (b.match(/^[A-Za-z]+/) || [""])[0];
+    if (la !== lb) return la.localeCompare(lb);
+    var na = parseInt((a.match(/\d+/) || [0])[0], 10);
+    var nb = parseInt((b.match(/\d+/) || [0])[0], 10);
+    return na - nb;
+  }
+
+  // ─── Stepper ─────────────────────────────────────────────────
+  function marcarEtapa(n, estado) {
+    var el = $('.etapa[data-etapa="' + n + '"]');
+    if (!el) return;
+    el.classList.remove("ativa", "concluida");
+    if (estado) el.classList.add(estado);
+  }
+
+  // ─── Lembrete de atualização (30 / 45 min) ───────────────────
+  // Inicia um novo ciclo, gravando o prazo para sobreviver ao recarregar.
+  function iniciarLembrete() {
+    var deadline = Date.now() + intervaloMin * 60000;
+    gravarJSON(KEY_LEMBRETE, { deadline: deadline, intervaloMin: intervaloMin });
+    rodarContador(deadline);
+  }
+
+  // Retoma o contador ao abrir a página (não reinicia ao sair).
+  function resumirLembrete() {
+    var st = lerJSON(KEY_LEMBRETE, null);
+    if (!st || !st.deadline) return;
+    intervaloMin = st.intervaloMin || 30;
+    if (st.deadline <= Date.now()) {
+      // o prazo já venceu enquanto a página estava fechada
+      $("#lembrete-topo").classList.remove("oculto");
+      $("#btn-verificar").classList.remove("oculto");
+      $("#lembrete-tempo").textContent = "00:00";
+      mostrarBannerLembrete();
+    } else {
+      rodarContador(st.deadline);
+    }
+  }
+
+  function rodarContador(deadline) {
+    pararLembrete();
+    $("#lembrete-topo").classList.remove("oculto");
+    $("#btn-verificar").classList.remove("oculto");
+    tick(deadline);
+    lembreteCountdown = setInterval(function () { tick(deadline); }, 1000);
+
+    function tick(dl) {
+      lembreteSegundos = Math.max(0, Math.round((dl - Date.now()) / 1000));
+      atualizarLembreteTopo();
+      if (lembreteSegundos <= 0) {
+        clearInterval(lembreteCountdown);
+        lembreteCountdown = null;
+        dispararLembrete();
+      }
+    }
+  }
+
+  function atualizarLembreteTopo() {
+    var m = Math.floor(lembreteSegundos / 60);
+    var s = lembreteSegundos % 60;
+    $("#lembrete-tempo").textContent =
+      (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function pararLembrete() {
+    if (lembreteCountdown) { clearInterval(lembreteCountdown); lembreteCountdown = null; }
+  }
+
+  function dispararLembrete() {
+    ciclosLembrete++;
+    // 1 a cada 3 ciclos: pergunta o fluxo antes de lembrar
+    if (ciclosLembrete % 3 === 0) {
+      $("#modal-fluxo").classList.remove("oculto");
+    } else {
+      mostrarBannerLembrete();
+      iniciarLembrete();
+    }
+  }
+
+  function mostrarBannerLembrete() {
+    $("#banner-lembrete").classList.remove("oculto");
+    if (typeof faltantes !== "undefined") {
+      $("#card-4").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  function responderFluxo(fluxo) {
+    intervaloMin = (fluxo === "congestionado") ? 45 : 30;
+    $("#modal-fluxo").classList.add("oculto");
+    mostrarBannerLembrete();
+    iniciarLembrete();
+    toast("Intervalo ajustado para " + intervaloMin + " minutos.");
+  }
+
+  // ─── ETAPA 1: processar faltantes ────────────────────────────
+  function processarFaltantes(texto) {
+    var linhas = parseCSV(texto);
+    if (linhas.length < 2) { toast("Arquivo vazio ou inválido."); return; }
+
+    var cab = linhas[0];
+    var idxId    = acharColuna(cab, ["ID do pacote", "ID pacote", "SHP_SHIPMENT_ID", "ID"]);
+    var idxRota  = acharColuna(cab, ["N.º Rota", "No Rota", "Nº Rota", "Rota", "N Rota"]);
+    var idxLoc   = acharColuna(cab, ["Localização do pacote", "Localizacao do pacote", "Localização", "Localizacao"]);
+    var idxParada= acharColuna(cab, ["Parada"]);
+    var idxPonto = acharColuna(cab, ["Ponto"]);
+    // "Data de Inbound" é a fonte NATIVA e autoritativa do horário de entrada
+    // na estação — vem direto do sistema-fonte, sem o desvio de horário que
+    // nosso cálculo via BigQuery apresentava. Quando presente, substitui
+    // qualquer horário derivado; quando a coluna existe mas vem vazia, o
+    // pacote é de um ciclo anterior (ex.: retornou de uma falha de entrega
+    // do dia anterior) e é DESCONSIDERADO da lista de bingo.
+    var idxInbound = acharColuna(cab, ["Data de Inbound", "Data de inbound", "DataDeInbound", "Data Inbound", "INBOUND"]);
+
+    if (idxId === -1 || idxLoc === -1) {
+      toast("Não foi possível identificar as colunas 'ID do pacote' e 'Localização do pacote'.");
+      return;
+    }
+
+    var descartadosSemInbound = 0;
+    faltantes = [];
+    for (var i = 1; i < linhas.length; i++) {
+      var l = linhas[i];
+      var loc = normalizar(l[idxLoc]);
+      // Somente pacotes fisicamente NA ESTAÇÃO (falha real a atacar)
+      if (loc !== "na estacao") continue;
+      var id = (l[idxId] || "").trim();
+      if (!id) continue;
+
+      var inboundTxt = idxInbound !== -1 ? (l[idxInbound] || "").trim() : "";
+      if (idxInbound !== -1 && !inboundTxt) {
+        // coluna existe nesta exportação, mas está vazia neste pacote:
+        // ciclo anterior, não relevante hoje — descarta.
+        descartadosSemInbound++;
+        continue;
+      }
+      var inboundMs = inboundTxt ? parseDataHora(inboundTxt) : 0;
+      if (inboundMs) entradas[id] = inboundMs; // autoritativo, sobrepõe o da planilha
+
+      var rotaComp = (idxRota !== -1 ? l[idxRota] : "") || "";
+      faltantes.push({
+        id: id,
+        rotaCompleta: rotaComp.trim(),
+        rota: rotaSimples(rotaComp),
+        ciclo: cicloDe(rotaComp),
+        parada: idxParada !== -1 ? (l[idxParada] || "").trim() : "",
+        ponto: idxPonto !== -1 ? (l[idxPonto] || "").trim() : ""
+      });
+    }
+
+    if (faltantes.length === 0) {
+      toast(descartadosSemInbound > 0
+        ? "Todos os pacotes 'Na estação' eram de ciclo anterior (sem Data de Inbound) e foram descartados."
+        : "Nenhum pacote com localização 'Na estação' foi encontrado.");
+      return;
+    }
+    if (descartadosSemInbound > 0) {
+      toast(descartadosSemInbound + " pacote(s) sem Data de Inbound (ciclo anterior) foram descartados.");
+    }
+
+    // guarda o texto para restaurar a tela automaticamente se a página for
+    // recarregada (senão a análise se perde e precisa subir o CSV de novo)
+    ultimoFaltantesTexto = texto;
+
+    // calcula tempos a partir das entradas guardadas, detecta resolvidos,
+    // registra a carga atual (poda entradas aos presentes) e continua
+    aplicarTempos();
+    registrarCargaFaltantes();
+    aposHistorico();
+  }
+
+  function aposHistorico() {
+    // marca dropzone como ok
+    var dz = $("#dz-faltantes");
+    dz.classList.add("ok");
+    var nome = $("#nome-faltantes");
+    nome.textContent = faltantes.length + " pacote(s) 'Na estação' identificado(s)";
+    nome.classList.remove("oculto");
+
+    gerarConsulta();
+    marcarEtapa(1, "concluida");
+
+    // IMPORTANTE: sempre tenta refrescar os valores/tempo da planilha a cada
+    // carga de faltantes (mesmo que já tivéssemos valores de uma carga
+    // anterior) — senão pacotes novos e o tempo dos que já estavam ficam
+    // presos no snapshot da primeira vez que os valores foram lidos.
+    // 1) Grid.sheets (planilha conectada, quando hospedado no Grid)
+    if (buscarValoresPlanilha()) return;
+    // 2) CSV publicado (opcional)
+    if (tentarAutoValores()) return;
+    // 3) sem Grid.sheets/CSV: se esta sessão já tinha valores manuais
+    // carregados, reaproveita (evita pedir upload de novo a cada carga);
+    // senão mostra o fluxo manual.
+    if (comValores) {
+      marcarEtapa(2, "concluida");
+      marcarEtapa(3, "concluida");
+      renderizar();
+      return;
+    }
+    mostrarManual();
+  }
+
+  function mostrarManual() {
+    $("#card-2").classList.remove("oculto");
+    $("#card-3").classList.remove("oculto");
+    marcarEtapa(2, "ativa");
+    $("#card-2").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // Lê a planilha de valores via Grid.sheets (OAuth do dono, server-side).
+  // Descobre a aba de extração automaticamente (a que começa com "Extra").
+  function buscarValoresPlanilha() {
+    if (!(window.Grid && Grid.sheets && SHEET_ID)) return false;
+    try {
+      var m = location.pathname.match(/\/d\/([^\/]+)/);
+      if (m && Grid.configure) Grid.configure({ docId: m[1] });
+    } catch (e) {}
+    toast("Buscando valores da planilha...");
+
+    // Nomes com espaço/acentos precisam de aspas simples na notação A1; nomes
+    // simples (só letras/números/_) não. Aspas em nomes acentuados causaram
+    // "invalid characters" no proxy de sheets do Grid — por isso preferimos
+    // nomes simples (ver SHEET_ABA) e só citamos quando estritamente preciso.
+    function ler(aba) {
+      var simples = /^[A-Za-z0-9_]+$/.test(aba);
+      var ref = simples ? aba : ("'" + aba + "'");
+      // Tenta pegar o valor CRU (número serial), imune ao fuso configurado na
+      // planilha; se a rota direta falhar (proxy não repassa o parâmetro),
+      // cai para Grid.sheets.get (valor formatado).
+      return lerBruto(ref).catch(function () {
+        return Grid.sheets.get(SHEET_ID, ref + "!A:D");
+      }).then(function (data) {
+        if (!data || !data.values || data.values.length < 2) throw new Error("aba vazia: " + aba);
+        processarValoresLinhas(data.values);
+      });
+    }
+
+    function lerBruto(ref) {
+      var m = location.pathname.match(/\/d\/([^\/]+)/);
+      var docId = m ? m[1] : "";
+      var qs = new URLSearchParams({
+        doc_id: docId, range: ref + "!A:D", valueRenderOption: "UNFORMATTED_VALUE"
+      });
+      return fetch("/api/v1/sheets/" + SHEET_ID + "?" + qs.toString())
+        .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+    }
+
+    // 1) tenta descobrir uma aba de extração de nome simples (ASCII); 2) cai para SHEET_ABA
+    var p = (Grid.sheets.info ? Grid.sheets.info(SHEET_ID) : Promise.reject())
+      .then(function (info) {
+        var abas = (info && info.sheets) || [];
+        var candidatas = abas
+          .filter(function (s) { return /^[A-Za-z0-9_]+$/.test(s.title || "") && /extra|dados|data/i.test(s.title || ""); })
+          .sort(function (a, b) { return (b.rowCount || 0) - (a.rowCount || 0); });
+        var alvo = (candidatas[0] && candidatas[0].title) || SHEET_ABA;
+        return ler(alvo);
+      })
+      .catch(function () { return ler(SHEET_ABA); });
+
+    p.catch(function (err) {
+      console.error("[Bingo] leitura da planilha falhou:", err);
+      toast("Não foi possível ler a planilha. Verifique o Google conectado no Grid. Usando modo manual.");
+      mostrarManual();
+    });
+
+    // Poka Yoke é opcional e não bloqueia o fluxo principal: busca em
+    // paralelo e, quando chegar, só atualiza as células já renderizadas.
+    buscarPokaYokePlanilha();
+
+    return true;
+  }
+
+  // Traduções de tipo de evento (espelha apps-script/AtualizarDados.gs, caso
+  // a aba POKAYOKE ainda traga só o tipo original em vez do já traduzido).
+  var TRADUCAO_EVENTO = {
+    "container_mismatch": "Atrelado à rota errada",
+    "qr_problem": "Problema na leitura do QR code"
+  };
+  function traduzirEvento(tipo) {
+    if (!tipo) return "";
+    var chave = tipo.toString().trim().toLowerCase();
+    if (TRADUCAO_EVENTO[chave]) return TRADUCAO_EVENTO[chave];
+    var t = chave.replace(/_/g, " ");
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+
+  // Lê a aba POKAYOKE (opcional). Falha silenciosa — é um dado extra, não
+  // deve travar nem mostrar erro se a aba não existir ainda.
+  function buscarPokaYokePlanilha() {
+    if (!(window.Grid && Grid.sheets && SHEET_ID)) return;
+    Grid.sheets.get(SHEET_ID, SHEET_ABA_POKAYOKE + "!A:I")
+      .then(function (data) {
+        if (!data || !data.values || data.values.length < 2) return;
+        processarPokaYokeLinhas(data.values);
+      })
+      .catch(function () { /* opcional: silencioso */ });
+  }
+
+  function processarPokaYokeLinhas(linhas) {
+    var cab = linhas[0].map(function (h) { return String(h).toUpperCase().trim(); });
+    var idxId    = cab.indexOf("SHIPMENT_ID");
+    var idxTipo  = cab.indexOf("EVENT_TYPE_PT");
+    var idxTipoOrig = cab.indexOf("EVENT_TYPE_ORIGINAL");
+    var idxLdap  = cab.indexOf("OPERATOR_LDAP");
+    var idxCont  = cab.indexOf("ROTAOT_CONTAINER");
+    var idxContId= cab.indexOf("CONTAINER_ID");
+    if (idxId === -1) return;
+
+    pokaYoke = {};
+    for (var i = 1; i < linhas.length; i++) {
+      var l = linhas[i];
+      var id = String(l[idxId] || "").trim();
+      if (!id) continue;
+      var tipoTraduzido = idxTipo !== -1 ? String(l[idxTipo] || "").trim() : "";
+      var tipoOriginal  = idxTipoOrig !== -1 ? String(l[idxTipoOrig] || "").trim() : "";
+      pokaYoke[id] = {
+        tipo: tipoTraduzido || traduzirEvento(tipoOriginal),
+        ldap: idxLdap !== -1 ? String(l[idxLdap] || "").trim() : "",
+        container: idxCont !== -1 && l[idxCont] ? String(l[idxCont]).trim() : (idxContId !== -1 ? String(l[idxContId] || "").trim() : "")
+      };
+    }
+    atualizarPokaYokeDOM();
+  }
+
+  function celulaProblema(pk) {
+    if (!pk) return '<span class="sem-dado">—</span>';
+    var rota = pk.container ? " · Rota " + escapar(pk.container) : "";
+    return '<span class="tag-problema">' +
+        escapar(pk.tipo) + (pk.ldap ? " · " + escapar(pk.ldap) : "") + rota +
+      '</span>';
+  }
+
+  // Atualiza só as células de "Problema" já renderizadas, sem re-render
+  // completo (Poka Yoke pode chegar depois do render principal).
+  function atualizarPokaYokeDOM() {
+    $all(".col-problema").forEach(function (td) {
+      var id = td.getAttribute("data-id");
+      var pk = pokaYoke[id];
+      td.innerHTML = celulaProblema(pk);
+      var tr = td.closest("tr");
+      if (tr) tr.setAttribute("data-problema", pk ? "1" : "0");
+    });
+    aplicarFiltros();
+  }
+
+  // Busca automática de valores a partir de uma planilha publicada (CSV)
+  function tentarAutoValores() {
+    if (!URL_VALORES_CSV) return false;
+    toast("Buscando valores automaticamente...");
+    fetch(URL_VALORES_CSV, { cache: "no-store" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.text();
+      })
+      .then(function (t) { processarValores(t); })
+      .catch(function () {
+        toast("Não foi possível buscar os valores. Use o modo manual.");
+        mostrarManual();
+      });
+    return true;
+  }
+
+  // ─── ETAPA 2: gerar consulta com IDs ─────────────────────────
+  function gerarConsulta() {
+    var ids = faltantes.map(function (f) { return f.id; });
+    // remove duplicados
+    ids = ids.filter(function (v, i, arr) { return arr.indexOf(v) === i; });
+    var listaIds = ids.join(", ");
+
+    var sql =
+"SELECT\n" +
+"    SHI.SHP_SHIPMENT_ID,\n" +
+"    CONCAT(\"R$ \", REPLACE(FORMAT(\"%.2f\", SHI.SHP_ORDER_COST), \".\", \",\")) AS MOEDA_LOCAL,\n" +
+"    ITENS.SHP_ITEM_DESC,\n" +
+"    FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%S%Ez', TIMESTAMP(ENTRADA.ENTROU_STATION, 'America/Sao_Paulo'), 'America/Sao_Paulo') AS ENTROU_STATION\n" +
+"FROM `meli-bi-data.WHOWNER.BT_SHP_SHIPMENTS` SHI\n" +
+"LEFT JOIN (\n" +
+"    SELECT\n" +
+"        SHP_SHIPMENT_ID AS PCT,\n" +
+"        MAX(ITE.SHP_ITEM_DESC) AS SHP_ITEM_DESC\n" +
+"    FROM `meli-bi-data.WHOWNER.BT_SHP_SHIPMENTS`,\n" +
+"        UNNEST(ITEMS) AS ITE\n" +
+"    GROUP BY 1\n" +
+") ITENS ON ITENS.PCT = SHI.SHP_SHIPMENT_ID\n" +
+"LEFT JOIN (\n" +
+"    -- momento em que o pacote entrou em 'at_station / sorting' (Na estação / Para despachar)\n" +
+"    SELECT\n" +
+"        SHP_SHIPMENT_ID AS PCT,\n" +
+"        MIN(SHP_LG_LAST_UPDATED) AS ENTROU_STATION\n" +
+"    FROM `meli-bi-data.WHOWNER.BT_SHP_LG_SHIPMENTS`\n" +
+"    WHERE SHP_LG_STATUS = 'at_station'\n" +
+"      AND SHP_LG_SUB_STATUS = 'sorting'\n" +
+"      AND SHP_LG_LAST_UPDATED >= DATETIME_SUB(CURRENT_DATETIME('America/Sao_Paulo'), INTERVAL 3 DAY)\n" +
+"    GROUP BY 1\n" +
+") ENTRADA ON ENTRADA.PCT = SHI.SHP_SHIPMENT_ID\n" +
+"WHERE SHI.SHP_SHIPMENT_ID IN (\n    " + listaIds + "\n);";
+
+    $("#sql-gerada").value = sql;
+    $("#contagem-ids").innerHTML = "<strong>" + ids.length + "</strong> ID(s) na consulta";
+  }
+
+  // ─── ETAPA 3: processar valores ──────────────────────────────
+  function processarValores(texto) {
+    var linhas = parseCSV(texto);
+    processarValoresLinhas(linhas);
+  }
+
+  // Processa as linhas de valores (de CSV ou da planilha via Grid.sheets)
+  function processarValoresLinhas(linhas) {
+    if (!linhas || linhas.length < 2) { toast("Dados de valores vazios ou inválidos."); return; }
+
+    var cab = linhas[0];
+    var idxId  = acharColuna(cab, ["SHP_SHIPMENT_ID", "ID do pacote", "ID", "PCT"]);
+    var idxVal = acharColuna(cab, ["MOEDA_LOCAL", "VALOR", "SHP_ORDER_COST"]);
+    var idxDesc= acharColuna(cab, ["SHP_ITEM_DESC", "CONTEUDO", "Conteudo", "Descrição", "Descricao"]);
+    // coluna opcional com o horário de entrada na estação (tempo compartilhado)
+    var idxTempo = acharColuna(cab, ["ENTROU_STATION", "ENTRADA_STATION", "DATA_STATION", "ENTROU", "DTTM_STATION"]);
+
+    if (idxId === -1) { toast("Coluna de ID não encontrada no arquivo de valores."); return; }
+
+    function celula(l, idx) { return (idx !== -1 && l[idx] != null) ? String(l[idx]).trim() : ""; }
+
+    valores = {};
+    for (var i = 1; i < linhas.length; i++) {
+      var l = linhas[i];
+      var id = celula(l, idxId);
+      if (!id) continue;
+      var valTxt = celula(l, idxVal);
+      valores[id] = {
+        valor: valTxt,
+        valorNum: moedaParaNumero(valTxt),
+        conteudo: celula(l, idxDesc),
+        entrou: idxTempo !== -1 ? parseDataHora(celula(l, idxTempo)) : 0
+      };
+    }
+    comValores = true;
+
+    // Popula as "entradas" (horário de entrada na estação) a partir do CSV,
+    // só para os IDs que ainda não têm um horário vindo da "Data de Inbound"
+    // nativa do CSV de faltantes (fonte autoritativa) — o ENTROU_STATION do
+    // BigQuery é só um fallback e NUNCA deve sobrepor o valor nativo.
+    var novosHorarios = 0;
+    Object.keys(valores).forEach(function (id) {
+      if (valores[id].entrou && !entradas[id]) { entradas[id] = valores[id].entrou; novosHorarios++; }
+    });
+    salvarColab();
+    aplicarTempos();
+
+    var dz = $("#dz-valores");
+    dz.classList.add("ok");
+    var nome = $("#nome-valores");
+    var qtd = Object.keys(valores).length;
+    nome.textContent = qtd + " valor(es) carregado(s)" + (novosHorarios ? " · " + novosHorarios + " com horário" : "");
+    nome.classList.remove("oculto");
+
+    marcarEtapa(3, "concluida");
+    renderizar();
+  }
+
+  function pularValores() {
+    comValores = false;
+    valores = {};
+    marcarEtapa(3, "concluida");
+    renderizar();
+  }
+
+  // ─── ETAPA 4: renderizar resultado ───────────────────────────
+  function agrupar() {
+    var grupos = {};
+    faltantes.forEach(function (f) {
+      var v = valores[f.id] || {};
+      var item = {
+        id: f.id,
+        rota: f.rota,
+        rotaCompleta: f.rotaCompleta,
+        ciclo: f.ciclo || "",
+        parada: f.parada,
+        ponto: f.ponto,
+        valor: v.valor || "",
+        valorNum: v.valorNum || 0,
+        conteudo: v.conteudo || "",
+        minutos: f.minutos || 0,
+        desde: f.desde || 0,
+        novo: !!f.novo,
+        semTempo: !!f.semTempo
+      };
+      // chave = rota + ciclo (evita misturar A1_PM1 com A1_AM1)
+      var chave = f.rotaCompleta && f.rotaCompleta.length ? f.rotaCompleta : "SEM ROTA";
+      if (!grupos[chave]) grupos[chave] = [];
+      grupos[chave].push(item);
+    });
+    // ordena cada grupo: por valor desc; sem valor, pelo maior tempo parado
+    Object.keys(grupos).forEach(function (r) {
+      grupos[r].sort(function (a, b) {
+        if (comValores && b.valorNum !== a.valorNum) return b.valorNum - a.valorNum;
+        return b.minutos - a.minutos;
+      });
+    });
+    return grupos;
+  }
+
+  function renderizar() {
+    $("#card-4").classList.remove("oculto");
+    marcarEtapa(4, "ativa");
+
+    // a coluna de tempo é sempre exibida
+    mostrarTempoCol = true;
+    // com muitos pacotes, inicia com as rotas recolhidas (renderiza muito
+    // mais rápido; as tabelas ocultas não custam layout). O usuário expande.
+    colapsarPorPadrao = faltantes.length > 200;
+
+    var grupos = agrupar();
+    var rotas = Object.keys(grupos).sort(ordenarRotas);
+
+    // Resumo
+    var totalPacotes = faltantes.length;
+    var totalValor = 0, semDado = 0;
+    faltantes.forEach(function (f) {
+      var v = valores[f.id];
+      if (v) totalValor += v.valorNum; else if (comValores) semDado++;
+    });
+    var persistentes = totalPacotes - novosCount;
+
+    // Aviso: pacotes sem valor/conteúdo = ainda não estão na planilha/CSV de
+    // valores (extração desatualizada), não é erro do sistema.
+    var avisoEl = $("#aviso-planilha");
+    if (comValores && semDado > 0) {
+      avisoEl.classList.remove("oculto");
+      avisoEl.textContent = semDado + " pacote(s) ainda não aparecem na planilha de valores " +
+        "(provavelmente entraram na estação depois da última extração). Atualize a extração no " +
+        "Google Sheets e clique em \"Verificar agora\" para completá-los.";
+    } else {
+      avisoEl.classList.add("oculto");
+    }
+
+    var resumoHtml =
+      kpi("alerta", totalPacotes, "Pacotes na estação") +
+      kpi("rotas", rotas.length, "Rotas afetadas");
+    if (houveHistorico) {
+      resumoHtml += kpi("persist", persistentes, "Persistem da carga anterior");
+      resumoHtml += kpi("novos", novosCount, "Novos nesta carga");
+      resumoHtml += kpi("resolvidos", resolvidos, "Resolvidos desde a última");
+    }
+    if (comValores) {
+      resumoHtml += kpi("valor", formatarBRL(totalValor), "Valor total em risco");
+    }
+    $("#resumo").innerHTML = resumoHtml;
+
+    // Destaques (estatísticas relevantes)
+    renderizarDestaques(rotas, grupos);
+
+    // Lista de rotas agrupadas por letra
+    var html = "";
+    if (rotas.length === 0) {
+      html = '<div class="cartao"><div class="vazio">Nenhum pacote na estação para exibir.</div></div>';
+    } else {
+      // agrupa por CICLO + letra (ex.: A/PM1) para não misturar ciclos
+      var grupoL = {};
+      rotas.forEach(function (r) {
+        var itens = grupos[r];
+        var ciclo = (itens[0] && itens[0].ciclo) || "";
+        var curto = (itens[0] && itens[0].rota) || r;
+        var L = (curto === "SEM ROTA") ? "Sem rota" : (curto.match(/^[A-Za-z]+/) || ["?"])[0];
+        var key = ciclo + "" + L;
+        if (!grupoL[key]) grupoL[key] = { letra: L, ciclo: ciclo, rotas: [] };
+        grupoL[key].rotas.push(r);
+      });
+      var chaves = Object.keys(grupoL).sort(function (a, b) {
+        var ga = grupoL[a], gb = grupoL[b];
+        if (ga.letra === "Sem rota") return 1;
+        if (gb.letra === "Sem rota") return -1;
+        var oc = ordemCiclo(ga.ciclo) - ordemCiclo(gb.ciclo);
+        if (oc !== 0) return oc;
+        return ga.letra.localeCompare(gb.letra);
+      });
+      chaves.forEach(function (key) {
+        var g = grupoL[key];
+        var rotasL = g.rotas.slice().sort(ordenarRotas);
+        var nPac = 0, val = 0;
+        rotasL.forEach(function (r) {
+          nPac += grupos[r].length;
+          grupos[r].forEach(function (i) { val += i.valorNum; });
+        });
+        var cards = rotasL.map(function (r) { return cartaoRota(r, grupos[r]); }).join("");
+        html += letraSecao(g.letra, g.ciclo, rotasL.length, nPac, val, cards);
+      });
+    }
+    $("#lista-rotas").innerHTML = html;
+    atualizarSelecaoInfo();
+    aplicarFiltros();
+
+    // esconde o banner de lembrete (recém-atualizado) e reinicia o contador
+    $("#banner-lembrete").classList.add("oculto");
+    iniciarLembrete();
+    iniciarPoll();
+    atualizarPokaYokeDOM(); // caso já tenhamos dados de Poka Yoke desta sessão
+
+    $("#card-4").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function kpi(cls, num, lab) {
+    return '<div class="kpi ' + cls + '">' +
+      '<div class="kpi-num">' + num + '</div>' +
+      '<div class="kpi-lab">' + lab + '</div>' +
+    '</div>';
+  }
+
+  function letraSecao(letra, ciclo, nRotas, nPac, val, cardsHtml) {
+    var stats = '<strong>' + nRotas + '</strong> rota(s) &middot; <strong>' + nPac + '</strong> pacote(s)' +
+      (comValores ? ' &middot; <strong>' + formatarBRL(val) + '</strong>' : '');
+    var badge = ciclo ? '<span class="ciclo-badge">' + escapar(ciclo) + '</span>' : '';
+    return '<div class="letra-grupo" data-letra="' + escapar(letra) + '" data-ciclo="' + escapar(ciclo) + '">' +
+        '<div class="letra-cabeca">' +
+          '<span class="letra-nome">' + escapar(letra) + '</span>' +
+          badge +
+          '<span class="letra-stats">' + stats + '</span>' +
+          '<span class="seta">&#9660;</span>' +
+        '</div>' +
+        '<div class="letra-corpo">' + cardsHtml + '</div>' +
+      '</div>';
+  }
+
+  // Estatísticas relevantes (gaiola com mais bingo, pacote mais caro, maior tempo)
+  function renderizarDestaques(rotas, grupos) {
+    var itens = [];
+
+    // Gaiola (rota) com mais pacotes em bingo
+    var maxRota = null, maxCount = -1;
+    rotas.forEach(function (r) {
+      if (grupos[r].length > maxCount) { maxCount = grupos[r].length; maxRota = r; }
+    });
+    if (maxRota) itens.push(["Gaiola com mais bingo", maxRota + " — " + maxCount + " pacote(s)"]);
+
+    // Pacote mais caro parado
+    if (comValores) {
+      var caro = null;
+      faltantes.forEach(function (f) {
+        var v = valores[f.id];
+        if (v && (!caro || v.valorNum > caro.v)) caro = { v: v.valorNum, id: f.id, rota: f.rotaCompleta || f.rota };
+      });
+      if (caro && caro.v > 0) itens.push(["Pacote mais caro parado", formatarBRL(caro.v) + " · " + caro.id + " (" + caro.rota + ")"]);
+    }
+
+    // Maior tempo parado
+    if (mostrarTempoCol) {
+      var mt = null;
+      faltantes.forEach(function (f) {
+        if (!mt || f.minutos > mt.m) mt = { m: f.minutos, id: f.id, rota: f.rotaCompleta || f.rota };
+      });
+      if (mt && mt.m > 0) itens.push(["Maior tempo parado", formatarMinutos(mt.m) + " · " + mt.id + " (" + mt.rota + ")"]);
+    }
+
+    var el = $("#destaques");
+    if (!itens.length) { el.classList.add("oculto"); el.innerHTML = ""; return; }
+    el.classList.remove("oculto");
+    el.innerHTML = itens.map(function (d) {
+      return '<div class="destaque-item"><span class="d-lab">' + d[0] + '</span><span class="d-val">' + escapar(d[1]) + '</span></div>';
+    }).join("");
+  }
+
+  function escapar(txt) {
+    return (txt || "").toString()
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function cartaoRota(rota, itens) {
+    var totalValor = itens.reduce(function (s, i) { return s + i.valorNum; }, 0);
+    var nomeCurto = (itens[0] && itens[0].rota) || rota;
+    var cicloR = (itens[0] && itens[0].ciclo) || "";
+    var badgeR = cicloR ? '<span class="ciclo-badge">' + escapar(cicloR) + '</span>' : "";
+
+    var linhas = itens.map(function (i) {
+      var valorCel = comValores
+        ? '<td class="col-valor">' + (i.valor || formatarBRL(i.valorNum)) + '</td>'
+        : "";
+      var conteudoCel = comValores
+        ? '<td class="col-conteudo">' + (i.conteudo ? escapar(i.conteudo) : '<span class="sem-dado">—</span>') + '</td>'
+        : "";
+      // classe de destaque conforme o tempo parado na estação
+      var classe = i.minutos >= 60 ? "linha-critica"
+                 : i.minutos >= 30 ? "linha-atencao" : "";
+      var achado = !!encontrados[i.id];
+      if (achado) classe += " encontrado";
+      var tempoConteudo = i.semTempo ? '<span class="sem-dado">—</span>'
+                        : (i.novo ? '<span class="tag-novo">Novo</span>' : formatarMinutos(i.minutos));
+      var tempoCel = mostrarTempoCol
+        ? '<td class="col-tempo">' + tempoConteudo + '</td>' +
+          '<td class="col-desde">' + (i.semTempo ? "—" : formatarHora(i.desde)) + '</td>'
+        : "";
+      var marcado = selecionados[i.id] ? " checked" : "";
+      var pk = pokaYoke[i.id];
+      var problemaCel = '<td class="col-problema" data-id="' + escapar(i.id) + '">' + celulaProblema(pk) + '</td>';
+      return '<tr class="' + classe.trim() + '" data-min="' + i.minutos + '" data-problema="' + (pk ? "1" : "0") + '" data-busca="' + escapar((i.id + " " + rota + " " + i.conteudo).toLowerCase()) + '">' +
+        '<td class="col-sel"><input type="checkbox" class="sel-row" data-id="' + escapar(i.id) + '"' + marcado + '></td>' +
+        '<td class="col-id"><a href="https://envios.adminml.com/logistics/package-management/package/' + encodeURIComponent(i.id) + '" target="_blank" rel="noopener">' + escapar(i.id) + '</a></td>' +
+        valorCel +
+        conteudoCel +
+        tempoCel +
+        '<td class="col-parada">' + escapar(i.parada || "—") + '</td>' +
+        problemaCel +
+        '<td class="col-acao"><button class="btn-encontrado' + (achado ? ' ativo' : '') + '" data-id="' + escapar(i.id) + '">' +
+          (achado ? 'Encontrado' : 'Marcar') + '</button></td>' +
+      '</tr>';
+    }).join("");
+
+    var thValor = comValores ? '<th class="th-right">Valor</th>' : "";
+    var thConteudo = comValores ? '<th>Conteúdo</th>' : "";
+    var thTempo = mostrarTempoCol ? '<th class="th-center">Tempo parado</th><th class="th-center">Desde</th>' : "";
+    var thProblema = '<th>Problema de sorting</th>';
+
+    var metricaValor = comValores
+      ? '<span class="m destaque">Valor: <strong>' + formatarBRL(totalValor) + '</strong></span>'
+      : "";
+    // maior tempo parado da rota
+    var maxMin = itens.reduce(function (mx, i) { return Math.max(mx, i.minutos); }, 0);
+    var metricaTempo = mostrarTempoCol
+      ? '<span class="m tempo">Máx parado: <strong>' + formatarMinutos(maxMin) + '</strong></span>'
+      : "";
+
+    // auditoria da gaiola (rota)
+    var aud = auditorias[rota];
+    var auditoriaHtml = aud
+      ? '<span class="auditoria feita" data-rota="' + escapar(rota) + '">Auditada por ' + escapar(aud.rep) + ' às ' + formatarHora(aud.ts) + '</span>'
+      : '<span class="auditoria" data-rota="' + escapar(rota) + '">Auditada por:' +
+          '<input type="text" class="input-rep" data-rota="' + escapar(rota) + '" placeholder="nome do rep" />' +
+        '</span>';
+
+    return '<div class="rota-cartao' + (colapsarPorPadrao ? ' recolhido' : '') + '" data-rota="' + escapar(rota) + '">' +
+      '<div class="rota-cabeca">' +
+        '<label class="rota-sel" title="Selecionar toda a gaiola"><input type="checkbox" class="sel-rota" data-rota="' + escapar(rota) + '"></label>' +
+        '<div class="rota-id">' +
+          '<span class="nome">' + escapar(nomeCurto) + '</span>' +
+        '</div>' +
+        badgeR +
+        '<div class="rota-metricas">' +
+          '<span class="m"><strong>' + itens.length + '</strong> pacote(s)</span>' +
+          metricaTempo +
+          metricaValor +
+        '</div>' +
+        auditoriaHtml +
+        '<span class="seta">&#9660;</span>' +
+      '</div>' +
+      '<div class="tabela-wrap">' +
+        '<table class="pacotes">' +
+          '<thead><tr>' +
+            '<th class="col-sel"></th>' +
+            '<th>ID do pacote</th>' +
+            thValor +
+            thConteudo +
+            thTempo +
+            '<th class="th-center">Parada</th>' +
+            thProblema +
+            '<th class="th-center">Ação</th>' +
+          '</tr></thead>' +
+          '<tbody>' + linhas + '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // Interações delegadas em #lista-rotas (conteúdo é recriado a cada render)
+  function configurarInteracoes() {
+    var lista = $("#lista-rotas");
+
+    lista.addEventListener("click", function (e) {
+      var alvo = e.target;
+
+      // botão "Marcar / Encontrado"
+      var btn = alvo.closest(".btn-encontrado");
+      if (btn) {
+        alternarEncontrado(btn.getAttribute("data-id"), btn);
+        return;
+      }
+
+      // clique no cabeçalho da letra recolhe/expande o grupo inteiro
+      var lc = alvo.closest(".letra-cabeca");
+      if (lc) { lc.parentNode.classList.toggle("recolhido"); return; }
+
+      // clique no cabeçalho da rota recolhe/expande — exceto em controles interativos
+      var cab = alvo.closest(".rota-cabeca");
+      if (cab && !alvo.closest("input, label, button, .auditoria")) {
+        cab.parentNode.classList.toggle("recolhido");
+      }
+    });
+
+    lista.addEventListener("change", function (e) {
+      var alvo = e.target;
+      if (alvo.classList.contains("sel-row")) {
+        var id = alvo.getAttribute("data-id");
+        if (alvo.checked) selecionados[id] = true; else delete selecionados[id];
+        atualizarSelecaoInfo();
+      } else if (alvo.classList.contains("sel-rota")) {
+        var card = alvo.closest(".rota-cartao");
+        Array.prototype.slice.call(card.querySelectorAll(".sel-row")).forEach(function (chk) {
+          chk.checked = alvo.checked;
+          var id = chk.getAttribute("data-id");
+          if (alvo.checked) selecionados[id] = true; else delete selecionados[id];
+        });
+        atualizarSelecaoInfo();
+      }
+    });
+
+    // registrar auditoria ao pressionar Enter ou sair do campo
+    lista.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && e.target.classList.contains("input-rep")) {
+        registrarAuditoria(e.target);
+      }
+    });
+    lista.addEventListener("blur", function (e) {
+      if (e.target.classList.contains("input-rep") && e.target.value.trim()) {
+        registrarAuditoria(e.target);
+      }
+    }, true);
+  }
+
+  function alternarEncontrado(id, btn) {
+    if (encontrados[id]) { delete encontrados[id]; }
+    else { encontrados[id] = Date.now(); }
+    var achado = !!encontrados[id];
+    salvarColab();
+    btn.classList.toggle("ativo", achado);
+    btn.textContent = achado ? "Encontrado" : "Marcar";
+    var tr = btn.closest("tr");
+    if (tr) tr.classList.toggle("encontrado", achado);
+  }
+
+  function registrarAuditoria(input) {
+    var rota = input.getAttribute("data-rota");
+    var rep = input.value.trim();
+    if (!rep) return;
+    auditorias[rota] = { rep: rep, ts: Date.now() };
+    salvarColab();
+    var span = input.closest(".auditoria");
+    if (span) {
+      span.classList.add("feita");
+      span.innerHTML = "Auditada por " + escapar(rep) + " às " + formatarHora(auditorias[rota].ts);
+    }
+    toast("Gaiola " + rota + " auditada por " + rep + ".");
+  }
+
+  function atualizarSelecaoInfo() {
+    $("#qtd-selecionados").textContent = Object.keys(selecionados).length;
+  }
+
+  // ─── Sincronização (outras máquinas) via Grid state ──────────
+  var pollTimer = null;
+  function iniciarPoll() {
+    if (!GS) return; // só quando hospedado no Grid
+    pararPoll();
+    pollTimer = setInterval(function () {
+      GS.get().then(function (r) {
+        var s = (r && r.state) || {};
+        encontrados = s.encontrados || {};
+        auditorias  = s.auditorias || {};
+        atualizarMarcasDOM();
+      }).catch(function () {});
+    }, 60000);
+  }
+  function pararPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+  // Atualiza os marcadores de "encontrado" e "auditada" sem recriar a lista
+  function atualizarMarcasDOM() {
+    $all(".btn-encontrado").forEach(function (btn) {
+      var id = btn.getAttribute("data-id");
+      var achado = !!encontrados[id];
+      btn.classList.toggle("ativo", achado);
+      btn.textContent = achado ? "Encontrado" : "Marcar";
+      var tr = btn.closest("tr");
+      if (tr) tr.classList.toggle("encontrado", achado);
+    });
+    $all(".auditoria").forEach(function (span) {
+      var rota = span.getAttribute("data-rota");
+      var aud = auditorias[rota];
+      if (aud && !span.classList.contains("feita")) {
+        span.classList.add("feita");
+        span.innerHTML = "Auditada por " + escapar(aud.rep) + " às " + formatarHora(aud.ts);
+      }
+    });
+  }
+
+  // ─── Filtros (busca + tempo parado) ──────────────────────────
+  var termoBusca = "";
+  var filtroMin  = 0;
+  var filtroProblema = false;
+
+  function aplicarFiltros() {
+    var termo = normalizar(termoBusca);
+    $all(".rota-cartao").forEach(function (card) {
+      var visiveis = 0;
+      Array.prototype.slice.call(card.querySelectorAll(".pacotes tbody tr")).forEach(function (tr) {
+        var okBusca = !termo || tr.getAttribute("data-busca").indexOf(termo) !== -1;
+        var min = parseInt(tr.getAttribute("data-min") || "0", 10);
+        var okTempo = min >= filtroMin;
+        var okProblema = !filtroProblema || tr.getAttribute("data-problema") === "1";
+        var mostrar = okBusca && okTempo && okProblema;
+        tr.style.display = mostrar ? "" : "none";
+        if (mostrar) visiveis++;
+      });
+      card.style.display = visiveis > 0 ? "" : "none";
+    });
+    // oculta grupos de letra que ficaram sem rotas visíveis
+    $all(".letra-grupo").forEach(function (lg) {
+      var algum = Array.prototype.slice.call(lg.querySelectorAll(".rota-cartao"))
+        .some(function (c) { return c.style.display !== "none"; });
+      lg.style.display = algum ? "" : "none";
+    });
+    var sel = $("#filtro-tempo");
+    if (sel) sel.classList.toggle("ativo", filtroMin > 0);
+  }
+
+  // Seleciona todos os pacotes atualmente visíveis (após filtro/busca)
+  function selecionarVisiveis() {
+    var qtd = 0;
+    $all(".rota-cartao").forEach(function (card) {
+      if (card.style.display === "none") return;
+      Array.prototype.slice.call(card.querySelectorAll(".pacotes tbody tr")).forEach(function (tr) {
+        if (tr.style.display === "none") return;
+        var chk = tr.querySelector(".sel-row");
+        if (chk) {
+          chk.checked = true;
+          selecionados[chk.getAttribute("data-id")] = true;
+          qtd++;
+        }
+      });
+      var selRota = card.querySelector(".sel-rota");
+      if (selRota) selRota.checked = true;
+    });
+    atualizarSelecaoInfo();
+    toast(qtd + " pacote(s) filtrado(s) selecionado(s).");
+  }
+
+  // ─── Exportar CSV ────────────────────────────────────────────
+  function exportarCSV() {
+    var grupos = agrupar();
+    var rotas = Object.keys(grupos).sort(ordenarRotas);
+    var linhas = [];
+    var cab = ["ROTA", "ID_PACOTE"];
+    if (comValores) { cab.push("VALOR"); cab.push("CONTEUDO"); }
+    if (mostrarTempoCol) { cab.push("TEMPO_MIN"); cab.push("DESDE"); cab.push("NOVO"); }
+    cab.push("PARADA"); cab.push("PONTO"); cab.push("ROTA_COMPLETA");
+    linhas.push(cab.join(";"));
+    rotas.forEach(function (r) {
+      grupos[r].forEach(function (i) {
+        var campos = [r, i.id];
+        if (comValores) { campos.push(i.valor || formatarBRL(i.valorNum)); campos.push('"' + (i.conteudo || "").replace(/"/g, '""') + '"'); }
+        if (mostrarTempoCol) { campos.push(i.minutos); campos.push(formatarHora(i.desde)); campos.push(i.novo ? "SIM" : "NAO"); }
+        campos.push(i.parada); campos.push(i.ponto); campos.push(i.rotaCompleta);
+        linhas.push(campos.join(";"));
+      });
+    });
+    var blob = new Blob(["﻿" + linhas.join("\n")], { type: "text/csv;charset=utf-8;" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    var hoje = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = "bingo_na_estacao_" + hoje + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast("CSV exportado.");
+  }
+
+  // ─── Selecionar tudo / limpar ────────────────────────────────
+  function selecionarTudo(marcar) {
+    selecionados = {};
+    if (marcar) {
+      faltantes.forEach(function (f) { selecionados[f.id] = true; });
+    }
+    $all(".sel-row").forEach(function (chk) { chk.checked = marcar; });
+    $all(".sel-rota").forEach(function (chk) { chk.checked = marcar; });
+    atualizarSelecaoInfo();
+  }
+
+  // ─── PDF de impressão ────────────────────────────────────────
+  // modo: "basico" (ID + conteúdo) ou "tudo" (todas as colunas)
+  function gerarPDF(modo) {
+    var ids = Object.keys(selecionados);
+    if (ids.length === 0) { toast("Selecione ao menos um pacote ou gaiola."); return; }
+
+    var tudo = (modo === "tudo");
+    var colValor  = tudo && comValores;
+    var colTempo  = tudo && mostrarTempoCol;
+    var colPP     = tudo; // parada e ponto
+
+    // agrupa os selecionados por rota
+    var grupos = agrupar();
+    var rotas = Object.keys(grupos).sort(ordenarRotas);
+    var agora = new Date();
+    var dataStr = agora.toLocaleString("pt-BR");
+
+    var corpo = "";
+    var totalSel = 0;
+    rotas.forEach(function (r) {
+      var sel = grupos[r].filter(function (i) { return selecionados[i.id]; });
+      if (sel.length === 0) return;
+      totalSel += sel.length;
+      var aud = auditorias[r];
+      var linhas = sel.map(function (i) {
+        return "<tr>" +
+          "<td>" + escapar(i.id) + "</td>" +
+          (colValor ? "<td>" + (i.valor || formatarBRL(i.valorNum)) + "</td>" : "") +
+          "<td>" + escapar(i.conteudo || "-") + "</td>" +
+          (colTempo ? "<td style='text-align:center'>" + formatarMinutos(i.minutos) + "</td>" : "") +
+          (colPP ? "<td style='text-align:center'>" + escapar(i.parada || "-") + "</td>" : "") +
+          (colPP ? "<td style='text-align:center'>" + escapar(i.ponto || "-") + "</td>" : "") +
+          "<td style='text-align:center'>&#9744;</td>" +
+        "</tr>";
+      }).join("");
+      corpo +=
+        "<div class='grupo'>" +
+          "<h2>Gaiola " + escapar(r) + " &middot; " + sel.length + " pacote(s)" +
+            (aud ? " &middot; auditada por " + escapar(aud.rep) : "") + "</h2>" +
+          "<table>" +
+            "<thead><tr>" +
+              "<th>ID do pacote</th>" +
+              (colValor ? "<th>Valor</th>" : "") +
+              "<th>Conteúdo</th>" +
+              (colTempo ? "<th>Tempo parado</th>" : "") +
+              (colPP ? "<th>Parada</th><th>Ponto</th>" : "") +
+              "<th>Achado</th>" +
+            "</tr></thead><tbody>" + linhas + "</tbody>" +
+          "</table>" +
+        "</div>";
+    });
+
+    // Imprime na própria página (sem pop-up — compatível com o Grid).
+    var area = $("#area-impressao");
+    area.innerHTML =
+      "<h1>Bingo Hora a Hora &middot; SSC2</h1>" +
+      "<div class='sub'>Pacotes a buscar &middot; " + totalSel + " selecionado(s) &middot; gerado em " + dataStr + "</div>" +
+      corpo;
+    setTimeout(function () { window.print(); }, 150);
+  }
+
+  // ─── Reiniciar ───────────────────────────────────────────────
+  function reiniciar() {
+    if (!window.confirm("Reiniciar vai limpar a tela atual. Deseja continuar?")) return;
+    pararPoll();
+    faltantes = []; valores = {}; comValores = false;
+    selecionados = {};
+    resolvidos = 0; novosCount = 0; houveHistorico = false;
+    tempoGlobal = false;
+    ultimoFaltantesTexto = "";
+    salvarColab();
+    pararLembrete();
+    ciclosLembrete = 0; intervaloMin = 30;
+    $("#lembrete-topo").classList.add("oculto");
+    $("#banner-lembrete").classList.add("oculto");
+    $("#aviso-planilha").classList.add("oculto");
+    $("#modal-fluxo").classList.add("oculto");
+    $("#card-2").classList.add("oculto");
+    $("#card-3").classList.add("oculto");
+    $("#card-4").classList.add("oculto");
+    $("#dz-faltantes").classList.remove("ok");
+    $("#dz-valores").classList.remove("ok");
+    $("#nome-faltantes").classList.add("oculto");
+    $("#nome-valores").classList.add("oculto");
+    $("#file-faltantes").value = "";
+    $("#file-valores").value = "";
+    $("#busca").value = "";
+    termoBusca = ""; filtroMin = 0; filtroProblema = false;
+    $("#filtro-tempo").value = "0";
+    $("#filtro-tempo").classList.remove("ativo");
+    $("#filtro-problema").checked = false;
+    marcarEtapa(1, "ativa");
+    marcarEtapa(2, ""); marcarEtapa(3, ""); marcarEtapa(4, "");
+    $("#topo").scrollIntoView({ behavior: "smooth" });
+  }
+
+  // ─── Ligações de eventos ─────────────────────────────────────
+  function lerArquivo(file, callback) {
+    var reader = new FileReader();
+    reader.onload = function (e) { callback(e.target.result); };
+    reader.readAsText(file, "UTF-8");
+  }
+
+  function configurarDropzone(dzId, inputId, handler) {
+    var dz = $(dzId), input = $(inputId);
+    input.addEventListener("change", function () {
+      if (input.files.length) lerArquivo(input.files[0], handler);
+    });
+    ["dragenter", "dragover"].forEach(function (ev) {
+      dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add("hover"); });
+    });
+    ["dragleave", "drop"].forEach(function (ev) {
+      dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove("hover"); });
+    });
+    dz.addEventListener("drop", function (e) {
+      var files = e.dataTransfer.files;
+      if (files.length) lerArquivo(files[0], handler);
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    configurarDropzone("#dz-faltantes", "#file-faltantes", processarFaltantes);
+    configurarDropzone("#dz-valores", "#file-valores", processarValores);
+
+    $("#btn-copiar").addEventListener("click", function () {
+      var ta = $("#sql-gerada");
+      ta.select();
+      try {
+        navigator.clipboard.writeText(ta.value).then(function () { toast("Consulta copiada."); });
+      } catch (e) {
+        document.execCommand("copy");
+        toast("Consulta copiada.");
+      }
+    });
+
+    $("#pular-valores").addEventListener("click", function (e) {
+      e.preventDefault();
+      pularValores();
+    });
+
+    $("#busca").addEventListener("input", function () { termoBusca = this.value; aplicarFiltros(); });
+    $("#filtro-tempo").addEventListener("change", function () { filtroMin = parseInt(this.value, 10) || 0; aplicarFiltros(); });
+    $("#filtro-problema").addEventListener("change", function () { filtroProblema = this.checked; aplicarFiltros(); });
+    $("#btn-sel-visiveis").addEventListener("click", selecionarVisiveis);
+    $("#btn-expandir").addEventListener("click", function () {
+      $all(".rota-cartao").forEach(function (c) { c.classList.remove("recolhido"); });
+      $all(".letra-grupo").forEach(function (c) { c.classList.remove("recolhido"); });
+    });
+    $("#btn-recolher").addEventListener("click", function () {
+      $all(".rota-cartao").forEach(function (c) { c.classList.add("recolhido"); });
+    });
+    $("#btn-exportar").addEventListener("click", exportarCSV);
+    $("#btn-reiniciar").addEventListener("click", reiniciar);
+    $("#btn-sel-todos").addEventListener("click", function () { selecionarTudo(true); });
+    $("#btn-sel-limpar").addEventListener("click", function () { selecionarTudo(false); });
+    $("#btn-pdf").addEventListener("click", function () {
+      if (Object.keys(selecionados).length === 0) { toast("Selecione ao menos um pacote ou gaiola."); return; }
+      $("#modal-pdf").classList.remove("oculto");
+    });
+    $("#pdf-cancelar").addEventListener("click", function () { $("#modal-pdf").classList.add("oculto"); });
+    $("#pdf-confirmar").addEventListener("click", function () {
+      var sel = document.querySelector('input[name="pdf-cols"]:checked');
+      var modo = sel ? sel.value : "basico";
+      $("#modal-pdf").classList.add("oculto");
+      gerarPDF(modo);
+    });
+
+    // Verificar agora: reabre o seletor de faltantes sem zerar o contador
+    $("#btn-verificar").addEventListener("click", function () {
+      $("#file-faltantes").click();
+    });
+
+    // Ajuda
+    $("#btn-ajuda").addEventListener("click", function () { $("#modal-ajuda").classList.remove("oculto"); });
+    $("#ajuda-fechar").addEventListener("click", function () { $("#modal-ajuda").classList.add("oculto"); });
+
+    $all("[data-fluxo]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        responderFluxo(this.getAttribute("data-fluxo"));
+      });
+    });
+    $("#fechar-lembrete").addEventListener("click", function () {
+      $("#banner-lembrete").classList.add("oculto");
+    });
+
+    // relógio de referência (São Paulo)
+    var relogio = $("#relogio");
+    function tickRelogio() {
+      var d = new Date();
+      var data = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" }).format(d);
+      var hora = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(d);
+      relogio.textContent = "São Paulo · " + data + " " + hora;
+    }
+    tickRelogio();
+    setInterval(tickRelogio, 1000);
+
+    // carrega estado colaborativo (Grid) ou local; se havia uma análise em
+    // andamento (última carga de faltantes), restaura a tela automaticamente
+    // em vez de perder tudo ao recarregar a página.
+    carregarColab(function () {
+      if (ultimoFaltantesTexto) {
+        toast("Restaurando última análise...");
+        processarFaltantes(ultimoFaltantesTexto);
+      }
+    });
+    configurarInteracoes();
+    resumirLembrete();
+  });
+
+})();
+</script>
+
+</body>
+</html>
