@@ -420,9 +420,10 @@
     font-weight: 600;
     padding: 2px 9px;
     border-radius: 20px;
-    white-space: nowrap;
+    white-space: normal;
+    line-height: 1.4;
   }
-  .col-problema { max-width: 220px; white-space: normal; }
+  .col-problema { min-width: 200px; max-width: 280px; white-space: normal; }
 
   /* seleção e auditoria */
   .col-sel { width: 34px; text-align: center; }
@@ -1859,7 +1860,6 @@
         conteudoCel +
         tempoCel +
         '<td class="col-parada">' + escapar(i.parada || "—") + '</td>' +
-        '<td class="col-ponto">' + escapar(i.ponto || "—") + '</td>' +
         problemaCel +
         '<td class="col-acao"><button class="btn-encontrado' + (achado ? ' ativo' : '') + '" data-id="' + escapar(i.id) + '">' +
           (achado ? 'Encontrado' : 'Marcar') + '</button></td>' +
@@ -1912,7 +1912,6 @@
             thConteudo +
             thTempo +
             '<th class="th-center">Parada</th>' +
-            '<th class="th-center">Ponto</th>' +
             thProblema +
             '<th class="th-center">Ação</th>' +
           '</tr></thead>' +
