@@ -99,10 +99,22 @@ publicado (`URL_VALORES_CSV`, opcional) e depois para o modo manual.
 O Connected Sheets do BigQuery não permite agendar a atualização da aba
 *extraída* — só da página conectada. Para eliminar o clique manual, use
 `apps-script/AtualizarDados.gs`: um gatilho de tempo que roda a consulta
-direto no BigQuery (serviço avançado BigQuery API) e escreve o resultado na
-aba `DADOS`. Instalação: veja os comentários no topo do arquivo — resumindo,
-cole o script no mesmo projeto Apps Script da planilha, ative o serviço
-avançado do BigQuery, e execute `criarGatilhoAtualizacao()` uma vez.
+direto no BigQuery **via REST API** (chamada com `UrlFetchApp` + o token
+OAuth do próprio script — **não** usa o serviço avançado "BigQuery", que
+falha com "invalid authentication credentials" em projetos GCP "Padrão") e
+escreve o resultado na aba `DADOS`. Instalação: veja os comentários no topo
+do arquivo — resumindo, cole o script no mesmo projeto Apps Script da
+planilha, confirme o escopo `bigquery` no `appsscript.json`, e execute
+`criarGatilhoAtualizacao()` uma vez.
+
+### Estatísticas por data (aba HISTORICO)
+
+A cada execução (a cada 30 min pelo gatilho), o script também calcula um
+resumo do momento — pacotes parados na estação, valor total em risco, maior
+tempo parado, ID mais caro — e adiciona uma linha na aba `HISTORICO` (criada
+automaticamente). Isso forma uma série temporal com data e hora prontas para
+tabela dinâmica ou gráfico, sem precisar de nenhum banco de dados externo:
+o próprio Google Sheets funciona como histórico.
 
 ## Recomendação de atualização
 

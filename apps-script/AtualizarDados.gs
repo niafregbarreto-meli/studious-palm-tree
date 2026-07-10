@@ -10,6 +10,12 @@
  * index.html espera:
  *   SHP_SHIPMENT_ID | MOEDA_LOCAL | SHP_ITEM_DESC | ENTROU_STATION
  *
+ * Também mantém um HISTÓRICO para estatísticas por data: a cada execução,
+ * calcula um resumo do momento (pacotes parados na estação, valor total em
+ * risco, maior tempo parado) e adiciona uma linha na aba "HISTORICO" — cria
+ * a aba automaticamente se não existir. Com o gatilho de 30 em 30 minutos,
+ * isso forma uma série temporal pronta para tabela dinâmica/gráfico por dia.
+ *
  * INSTALAÇÃO (uma vez):
  * 1. No editor de Apps Script (o mesmo projeto do Codigo.gs), adicione este
  *    arquivo: "+" ao lado de "Arquivos" → Script → cole este conteúdo.
@@ -137,6 +143,62 @@ function atualizarDadosBigQuery() {
   }
 
   Logger.log("DADOS atualizado: " + (linhas.length - 1) + " linhas.");
+
+  registrarHistorico_(linhas);
+}
+
+/**
+ * Calcula um resumo do momento (pacotes parados, valor em risco, maior
+ * tempo) a partir das linhas de DADOS e adiciona uma linha na aba
+ * HISTORICO. Roda a cada execução (a cada 30 min pelo gatilho), formando
+ * uma série temporal para estatísticas por data.
+ */
+function registrarHistorico_(linhas) {
+  var agora = new Date();
+  var parados = 0, valorTotal = 0, maxMin = -1, idMaxTempo = "", idMaisCaro = "", valorMaisCaro = -1;
+
+  for (var i = 1; i < linhas.length; i++) {
+    var id = linhas[i][0];
+    var valorTxt = linhas[i][1];
+    var entrou = linhas[i][3];
+    var valorNum = parseMoeda_(valorTxt);
+
+    if (entrou) {
+      parados++;
+      valorTotal += valorNum;
+      var entrouMs = Date.parse(entrou);
+      if (!isNaN(entrouMs)) {
+        var minutos = Math.round((agora.getTime() - entrouMs) / 60000);
+        if (minutos > maxMin) { maxMin = minutos; idMaxTempo = id; }
+      }
+    }
+    if (valorNum > valorMaisCaro) { valorMaisCaro = valorNum; idMaisCaro = id; }
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName("HISTORICO");
+  if (!sh) {
+    sh = ss.insertSheet("HISTORICO");
+    sh.appendRow(["DATA", "HORA", "PACOTES_PARADOS", "VALOR_TOTAL", "MAX_TEMPO_MIN", "ID_MAIOR_TEMPO", "ID_MAIS_CARO", "VALOR_MAIS_CARO"]);
+  }
+  sh.appendRow([
+    Utilities.formatDate(agora, "America/Sao_Paulo", "yyyy-MM-dd"),
+    Utilities.formatDate(agora, "America/Sao_Paulo", "HH:mm"),
+    parados,
+    Math.round(valorTotal * 100) / 100,
+    Math.max(maxMin, 0),
+    idMaxTempo,
+    idMaisCaro,
+    Math.round(valorMaisCaro * 100) / 100
+  ]);
+}
+
+// "R$ 1.234,56" -> 1234.56
+function parseMoeda_(txt) {
+  if (!txt) return 0;
+  var limpo = String(txt).replace(/[^0-9.,-]/g, "").replace(/\./g, "").replace(",", ".");
+  var n = parseFloat(limpo);
+  return isNaN(n) ? 0 : n;
 }
 
 /**
