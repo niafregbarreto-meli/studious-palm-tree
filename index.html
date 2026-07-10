@@ -868,6 +868,7 @@
   var selecionados = {};  // id -> true (seleção para o PDF)
   var entradas     = {};  // id -> epoch ms (quando entrou 'Na estação', do BigQuery)
   var ultimosIds   = [];  // ids da carga anterior de faltantes (p/ detectar resolvidos)
+  var ultimoFaltantesTexto = ""; // texto do último CSV de faltantes (para restaurar ao recarregar a página)
 
   // Acesso indireto ao armazenamento do navegador (evita rejeição do Grid,
   // que bloqueia HTML citando o armazenamento do navegador). Fora do Grid é o
@@ -891,6 +892,7 @@
     auditorias  = s.auditorias  || {};
     entradas    = s.entradas    || {};
     ultimosIds  = s.ultimosIds  || [];
+    ultimoFaltantesTexto = s.ultimoFaltantesTexto || "";
   }
 
   function carregarColab(cb) {
@@ -905,12 +907,16 @@
 
   // grava o estado compartilhado (read-merge-write para não sobrescrever colegas)
   function salvarColab() {
-    var payload = { encontrados: encontrados, auditorias: auditorias, entradas: entradas, ultimosIds: ultimosIds };
+    var payload = {
+      encontrados: encontrados, auditorias: auditorias, entradas: entradas,
+      ultimosIds: ultimosIds, ultimoFaltantesTexto: ultimoFaltantesTexto
+    };
     if (GS) {
       GS.get().then(function (r) {
         var s = (r && r.state) || {};
         s.encontrados = encontrados; s.auditorias = auditorias;
         s.entradas = entradas; s.ultimosIds = ultimosIds;
+        s.ultimoFaltantesTexto = ultimoFaltantesTexto;
         return GS.set(s);
       }).catch(function () {});
     } else {
@@ -1260,6 +1266,10 @@
       return;
     }
 
+    // guarda o texto para restaurar a tela automaticamente se a página for
+    // recarregada (senão a análise se perde e precisa subir o CSV de novo)
+    ultimoFaltantesTexto = texto;
+
     // calcula tempos a partir das entradas guardadas, detecta resolvidos,
     // registra a carga atual (poda entradas aos presentes) e continua
     aplicarTempos();
@@ -1278,19 +1288,23 @@
     gerarConsulta();
     marcarEtapa(1, "concluida");
 
-    // Se o backend já trouxe os valores, pula direto para o resultado.
+    // IMPORTANTE: sempre tenta refrescar os valores/tempo da planilha a cada
+    // carga de faltantes (mesmo que já tivéssemos valores de uma carga
+    // anterior) — senão pacotes novos e o tempo dos que já estavam ficam
+    // presos no snapshot da primeira vez que os valores foram lidos.
+    // 1) Grid.sheets (planilha conectada, quando hospedado no Grid)
+    if (buscarValoresPlanilha()) return;
+    // 2) CSV publicado (opcional)
+    if (tentarAutoValores()) return;
+    // 3) sem Grid.sheets/CSV: se esta sessão já tinha valores manuais
+    // carregados, reaproveita (evita pedir upload de novo a cada carga);
+    // senão mostra o fluxo manual.
     if (comValores) {
       marcarEtapa(2, "concluida");
       marcarEtapa(3, "concluida");
       renderizar();
       return;
     }
-
-    // 1) Grid.sheets (planilha conectada, quando hospedado no Grid)
-    if (buscarValoresPlanilha()) return;
-    // 2) CSV publicado (opcional)
-    if (tentarAutoValores()) return;
-    // 3) fluxo manual (etapas 2 e 3)
     mostrarManual();
   }
 
@@ -2051,6 +2065,8 @@
     selecionados = {};
     resolvidos = 0; novosCount = 0; houveHistorico = false;
     tempoGlobal = false;
+    ultimoFaltantesTexto = "";
+    salvarColab();
     pararLembrete();
     ciclosLembrete = 0; intervaloMin = 30;
     $("#lembrete-topo").classList.add("oculto");
@@ -2174,8 +2190,15 @@
     tickRelogio();
     setInterval(tickRelogio, 1000);
 
-    // carrega estado colaborativo (Grid) ou local, e configura interações
-    carregarColab(function () { if (faltantes.length) atualizarMarcasDOM(); });
+    // carrega estado colaborativo (Grid) ou local; se havia uma análise em
+    // andamento (última carga de faltantes), restaura a tela automaticamente
+    // em vez de perder tudo ao recarregar a página.
+    carregarColab(function () {
+      if (ultimoFaltantesTexto) {
+        toast("Restaurando última análise...");
+        processarFaltantes(ultimoFaltantesTexto);
+      }
+    });
     configurarInteracoes();
     resumirLembrete();
   });
