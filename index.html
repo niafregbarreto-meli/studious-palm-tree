@@ -412,6 +412,17 @@
     border-radius: 20px;
   }
   .rota-metricas .m.tempo strong { color: var(--ml-orange); }
+  .tag-problema {
+    display: inline-block;
+    background: #FDECEC;
+    color: var(--ml-red);
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .col-problema { max-width: 220px; white-space: normal; }
 
   /* seleção e auditoria */
   .col-sel { width: 34px; text-align: center; }
@@ -829,6 +840,10 @@
   // espaços ou números com underline) — nomes como "Extração 1" causam erro
   // "Sheet range contains invalid characters" no proxy de sheets do Grid.
   var SHEET_ABA = "DADOS";
+  // Aba com os eventos de Poka Yoke (problemas de sorting) do dia, gerada
+  // pelo apps-script/AtualizarDados.gs. Opcional — se não existir/falhar, a
+  // app simplesmente não mostra a coluna de problema.
+  var SHEET_ABA_POKAYOKE = "POKAYOKE";
 
   // ─── Backend compartilhado (Apps Script) ─────────────────────
   function backendPost(payload) {
@@ -851,6 +866,7 @@
   // ─── Estado ──────────────────────────────────────────────────
   var faltantes = [];   // linhas "Na estação"
   var valores   = {};   // mapa ID -> { valor, valorNum, conteudo }
+  var pokaYoke  = {};   // mapa ID -> { tipo, ldap, containerNome }
   var comValores = false;
 
   // ─── Estado persistente ──────────────────────────────────────
@@ -1404,7 +1420,78 @@
       toast("Não foi possível ler a planilha. Verifique o Google conectado no Grid. Usando modo manual.");
       mostrarManual();
     });
+
+    // Poka Yoke é opcional e não bloqueia o fluxo principal: busca em
+    // paralelo e, quando chegar, só atualiza as células já renderizadas.
+    buscarPokaYokePlanilha();
+
     return true;
+  }
+
+  // Traduções de tipo de evento (espelha apps-script/AtualizarDados.gs, caso
+  // a aba POKAYOKE ainda traga só o tipo original em vez do já traduzido).
+  var TRADUCAO_EVENTO = {
+    "container_mismatch": "Atrelado à rota errada",
+    "qr_problem": "Problema na leitura do QR code"
+  };
+  function traduzirEvento(tipo) {
+    if (!tipo) return "";
+    var chave = tipo.toString().trim().toLowerCase();
+    if (TRADUCAO_EVENTO[chave]) return TRADUCAO_EVENTO[chave];
+    var t = chave.replace(/_/g, " ");
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+
+  // Lê a aba POKAYOKE (opcional). Falha silenciosa — é um dado extra, não
+  // deve travar nem mostrar erro se a aba não existir ainda.
+  function buscarPokaYokePlanilha() {
+    if (!(window.Grid && Grid.sheets && SHEET_ID)) return;
+    Grid.sheets.get(SHEET_ID, SHEET_ABA_POKAYOKE + "!A:I")
+      .then(function (data) {
+        if (!data || !data.values || data.values.length < 2) return;
+        processarPokaYokeLinhas(data.values);
+      })
+      .catch(function () { /* opcional: silencioso */ });
+  }
+
+  function processarPokaYokeLinhas(linhas) {
+    var cab = linhas[0].map(function (h) { return String(h).toUpperCase().trim(); });
+    var idxId    = cab.indexOf("SHIPMENT_ID");
+    var idxTipo  = cab.indexOf("EVENT_TYPE_PT");
+    var idxTipoOrig = cab.indexOf("EVENT_TYPE_ORIGINAL");
+    var idxLdap  = cab.indexOf("OPERATOR_LDAP");
+    var idxCont  = cab.indexOf("CONTAINER_NOME");
+    var idxContId= cab.indexOf("CONTAINER_ID");
+    if (idxId === -1) return;
+
+    pokaYoke = {};
+    for (var i = 1; i < linhas.length; i++) {
+      var l = linhas[i];
+      var id = String(l[idxId] || "").trim();
+      if (!id) continue;
+      var tipoTraduzido = idxTipo !== -1 ? String(l[idxTipo] || "").trim() : "";
+      var tipoOriginal  = idxTipoOrig !== -1 ? String(l[idxTipoOrig] || "").trim() : "";
+      pokaYoke[id] = {
+        tipo: tipoTraduzido || traduzirEvento(tipoOriginal),
+        ldap: idxLdap !== -1 ? String(l[idxLdap] || "").trim() : "",
+        container: idxCont !== -1 && l[idxCont] ? String(l[idxCont]).trim() : (idxContId !== -1 ? String(l[idxContId] || "").trim() : "")
+      };
+    }
+    atualizarPokaYokeDOM();
+  }
+
+  // Atualiza só as células de "Problema" já renderizadas, sem re-render
+  // completo (Poka Yoke pode chegar depois do render principal).
+  function atualizarPokaYokeDOM() {
+    $all(".col-problema").forEach(function (td) {
+      var id = td.getAttribute("data-id");
+      var pk = pokaYoke[id];
+      td.innerHTML = pk
+        ? '<span class="tag-problema" title="' + escapar(pk.container ? "Container: " + pk.container : "") + '">' +
+            escapar(pk.tipo) + (pk.ldap ? " · " + escapar(pk.ldap) : "") +
+          '</span>'
+        : '<span class="sem-dado">—</span>';
+    });
   }
 
   // Busca automática de valores a partir de uma planilha publicada (CSV)
@@ -1656,6 +1743,7 @@
     $("#banner-lembrete").classList.add("oculto");
     iniciarLembrete();
     iniciarPoll();
+    atualizarPokaYokeDOM(); // caso já tenhamos dados de Poka Yoke desta sessão
 
     $("#card-4").scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -1751,6 +1839,14 @@
           '<td class="col-desde">' + (i.semTempo ? "—" : formatarHora(i.desde)) + '</td>'
         : "";
       var marcado = selecionados[i.id] ? " checked" : "";
+      var pk = pokaYoke[i.id];
+      var problemaCel = '<td class="col-problema" data-id="' + escapar(i.id) + '">' +
+        (pk
+          ? '<span class="tag-problema" title="' + escapar(pk.container ? "Container: " + pk.container : "") + '">' +
+              escapar(pk.tipo) + (pk.ldap ? " · " + escapar(pk.ldap) : "") +
+            '</span>'
+          : '<span class="sem-dado">—</span>') +
+      '</td>';
       return '<tr class="' + classe.trim() + '" data-min="' + i.minutos + '" data-busca="' + escapar((i.id + " " + rota + " " + i.conteudo).toLowerCase()) + '">' +
         '<td class="col-sel"><input type="checkbox" class="sel-row" data-id="' + escapar(i.id) + '"' + marcado + '></td>' +
         '<td class="col-id"><a href="https://envios.adminml.com/logistics/package-management/package/' + encodeURIComponent(i.id) + '" target="_blank" rel="noopener">' + escapar(i.id) + '</a></td>' +
@@ -1759,6 +1855,7 @@
         tempoCel +
         '<td class="col-parada">' + escapar(i.parada || "—") + '</td>' +
         '<td class="col-ponto">' + escapar(i.ponto || "—") + '</td>' +
+        problemaCel +
         '<td class="col-acao"><button class="btn-encontrado' + (achado ? ' ativo' : '') + '" data-id="' + escapar(i.id) + '">' +
           (achado ? 'Encontrado' : 'Marcar') + '</button></td>' +
       '</tr>';
@@ -1767,6 +1864,7 @@
     var thValor = comValores ? '<th class="th-right">Valor</th>' : "";
     var thConteudo = comValores ? '<th>Conteúdo</th>' : "";
     var thTempo = mostrarTempoCol ? '<th class="th-center">Tempo parado</th><th class="th-center">Desde</th>' : "";
+    var thProblema = '<th>Problema de sorting</th>';
 
     var metricaValor = comValores
       ? '<span class="m destaque">Valor: <strong>' + formatarBRL(totalValor) + '</strong></span>'
@@ -1810,6 +1908,7 @@
             thTempo +
             '<th class="th-center">Parada</th>' +
             '<th class="th-center">Ponto</th>' +
+            thProblema +
             '<th class="th-center">Ação</th>' +
           '</tr></thead>' +
           '<tbody>' + linhas + '</tbody>' +

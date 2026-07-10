@@ -86,44 +86,8 @@ var SQL_VALORES = [
  * identidade que já tem acesso delegado ao BigQuery via Connected Sheets.
  */
 function atualizarDadosBigQuery() {
-  var token = ScriptApp.getOAuthToken();
-  var base = "https://bigquery.googleapis.com/bigquery/v2/projects/" + PROJECT_ID;
-
-  function chamar(url, payload) {
-    var opts = {
-      method: payload ? "post" : "get",
-      contentType: "application/json",
-      headers: { Authorization: "Bearer " + token },
-      muteHttpExceptions: true
-    };
-    if (payload) opts.payload = JSON.stringify(payload);
-    var resp = UrlFetchApp.fetch(url, opts);
-    var json = JSON.parse(resp.getContentText());
-    if (json.error) throw new Error(JSON.stringify(json.error));
-    return json;
-  }
-
-  var json = chamar(base + "/queries", { query: SQL_VALORES, useLegacySql: false, timeoutMs: 30000 });
-  var jobRef = json.jobReference;
-
-  while (!json.jobComplete) {
-    Utilities.sleep(1000);
-    json = chamar(base + "/queries/" + jobRef.jobId);
-  }
-
   var linhas = [["SHP_SHIPMENT_ID", "MOEDA_LOCAL", "SHP_ITEM_DESC", "ENTROU_STATION"]];
-  (json.rows || []).forEach(function (row) {
-    linhas.push(row.f.map(function (cell) { return cell.v; }));
-  });
-
-  var pageToken = json.pageToken;
-  while (pageToken) {
-    var pagina = chamar(base + "/queries/" + jobRef.jobId + "?pageToken=" + encodeURIComponent(pageToken));
-    (pagina.rows || []).forEach(function (row) {
-      linhas.push(row.f.map(function (cell) { return cell.v; }));
-    });
-    pageToken = pagina.pageToken;
-  }
+  linhas = linhas.concat(executarSqlBigQuery_(SQL_VALORES));
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName(ABA_DADOS);
@@ -145,6 +109,52 @@ function atualizarDadosBigQuery() {
   Logger.log("DADOS atualizado: " + (linhas.length - 1) + " linhas.");
 
   registrarHistorico_(linhas);
+  atualizarPokaYoke();
+}
+
+// Executa uma consulta no BigQuery via REST (token OAuth do script, sem o
+// serviço avançado — ver nota em atualizarDadosBigQuery). Retorna só as
+// linhas de dados (sem cabeçalho), cada uma como array de valores.
+function executarSqlBigQuery_(sql) {
+  var token = ScriptApp.getOAuthToken();
+  var base = "https://bigquery.googleapis.com/bigquery/v2/projects/" + PROJECT_ID;
+
+  function chamar(url, payload) {
+    var opts = {
+      method: payload ? "post" : "get",
+      contentType: "application/json",
+      headers: { Authorization: "Bearer " + token },
+      muteHttpExceptions: true
+    };
+    if (payload) opts.payload = JSON.stringify(payload);
+    var resp = UrlFetchApp.fetch(url, opts);
+    var json = JSON.parse(resp.getContentText());
+    if (json.error) throw new Error(JSON.stringify(json.error));
+    return json;
+  }
+
+  var json = chamar(base + "/queries", { query: sql, useLegacySql: false, timeoutMs: 30000 });
+  var jobRef = json.jobReference;
+
+  while (!json.jobComplete) {
+    Utilities.sleep(1000);
+    json = chamar(base + "/queries/" + jobRef.jobId);
+  }
+
+  var linhas = [];
+  (json.rows || []).forEach(function (row) {
+    linhas.push(row.f.map(function (cell) { return cell.v; }));
+  });
+
+  var pageToken = json.pageToken;
+  while (pageToken) {
+    var pagina = chamar(base + "/queries/" + jobRef.jobId + "?pageToken=" + encodeURIComponent(pageToken));
+    (pagina.rows || []).forEach(function (row) {
+      linhas.push(row.f.map(function (cell) { return cell.v; }));
+    });
+    pageToken = pagina.pageToken;
+  }
+  return linhas;
 }
 
 /**
@@ -216,4 +226,103 @@ function criarGatilhoAtualizacao() {
     .everyMinutes(30)
     .create();
   Logger.log("Gatilho criado: atualizarDadosBigQuery a cada 30 minutos.");
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// POKA YOKE — problemas de sorting (container/rota errada, QR, etc.)
+// Chamada automaticamente ao final de atualizarDadosBigQuery (mesmo
+// gatilho de 30 min, não precisa criar outro). Escreve na aba POKAYOKE.
+// ══════════════════════════════════════════════════════════════════════
+
+// Planilha publicada (CSV) que traduz OPERATOR_ID -> LDAP (nome de usuário).
+var URL_OPERADORES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSAhBGJhmdVNCbHAcalGpzzoi_dUg0l7oD8VcZPDU47nx5KtRhQfzpfZ93-NK8Lk6Xo1a68jM2aUc1m/pub?gid=1229051516&single=true&output=csv";
+
+// TODO: quando disponível, preencher com a planilha publicada que traduz
+// CONTAINER_ID (e WRONG_CONTAINER_ID) -> nome da rota. Até lá, o ID do
+// container aparece em bruto na aba POKAYOKE e na app.
+var URL_CONTAINERS = "";
+
+var ABA_POKAYOKE = "POKAYOKE";
+
+var SQL_POKAYOKE = [
+  "SELECT",
+  "  CONTAINER_ID, EVENT_DATE, EVENT_TYPE, OPERATOR_ID,",
+  "  SHIPMENT_ID, WRONG_CONTAINER_ID, WRONG_SHIPMENT_ID",
+  "FROM `meli-bi-data.WHOWNER_FEED.SHIPPING_SORTING_POKAYOKE`",
+  "WHERE FACILITY_ID = 'SSC2'",
+  "  AND DATE(EVENT_DATE) = CURRENT_DATE('America/Sao_Paulo')",
+  "ORDER BY EVENT_DATE DESC"
+].join("\n");
+
+// Traduz o tipo de evento para linguagem natural. Tipos desconhecidos
+// aparecem formatados (ex.: "SOME_NEW_TYPE" -> "Some new type").
+var TRADUCAO_EVENTO = {
+  "CONTAINER_MISMATCH": "Atrelado à rota errada",
+  "QR_PROBLEM": "Problema na leitura do QR code"
+};
+function traduzirEvento_(tipo) {
+  if (!tipo) return "";
+  if (TRADUCAO_EVENTO[tipo]) return TRADUCAO_EVENTO[tipo];
+  var t = String(tipo).replace(/_/g, " ").toLowerCase();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+function atualizarPokaYoke() {
+  var linhasBQ = executarSqlBigQuery_(SQL_POKAYOKE);
+  var mapaOperadores = buscarMapaOperadores_();
+  var mapaContainers = URL_CONTAINERS ? buscarMapaCsv_(URL_CONTAINERS) : {};
+
+  var linhas = [["SHIPMENT_ID", "EVENT_TYPE_ORIGINAL", "EVENT_TYPE_PT", "OPERATOR_ID", "OPERATOR_LDAP", "CONTAINER_ID", "CONTAINER_NOME", "WRONG_CONTAINER_ID", "EVENT_DATE"]];
+  linhasBQ.forEach(function (row) {
+    // ordem da SQL: CONTAINER_ID, EVENT_DATE, EVENT_TYPE, OPERATOR_ID, SHIPMENT_ID, WRONG_CONTAINER_ID, WRONG_SHIPMENT_ID
+    var containerId = row[0], eventDate = row[1], eventType = row[2];
+    var operatorId  = row[3], shipmentId = row[4], wrongContainerId = row[5];
+    var ldap = mapaOperadores[String(operatorId)] || "";
+    var containerNome = mapaContainers[String(containerId)] || "";
+    linhas.push([
+      String(shipmentId), eventType, traduzirEvento_(eventType),
+      String(operatorId), ldap, String(containerId), containerNome,
+      String(wrongContainerId || ""), eventDate
+    ]);
+  });
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(ABA_POKAYOKE);
+  if (!sh) sh = ss.insertSheet(ABA_POKAYOKE);
+  sh.clearContents();
+  var linhasDados = Math.max(linhas.length, 2);
+  sh.getRange(1, 1, linhasDados, linhas[0].length).setNumberFormat("@");
+  sh.getRange(1, 1, linhas.length, linhas[0].length).setValues(linhas);
+
+  Logger.log("POKAYOKE atualizado: " + (linhas.length - 1) + " eventos.");
+}
+
+// Lê um CSV publicado com colunas ID e um nome/label, tentando várias
+// combinações comuns de cabeçalho. Retorna { id: label }.
+function buscarMapaCsv_(url, colId, colLabel) {
+  colId = colId || ["USER_ID", "OPERATOR_ID", "ID"];
+  colLabel = colLabel || ["LDAP", "USERNAME", "NOME"];
+  var mapa = {};
+  try {
+    var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) return mapa;
+    var linhas = Utilities.parseCsv(resp.getContentText());
+    if (linhas.length < 2) return mapa;
+    var cab = linhas[0].map(function (h) { return String(h).trim().toUpperCase(); });
+    var idxId = -1, idxLabel = -1;
+    colId.forEach(function (c) { if (idxId === -1) idxId = cab.indexOf(c); });
+    colLabel.forEach(function (c) { if (idxLabel === -1) idxLabel = cab.indexOf(c); });
+    if (idxId === -1 || idxLabel === -1) return mapa;
+    for (var i = 1; i < linhas.length; i++) {
+      var id = String(linhas[i][idxId]).trim();
+      if (id) mapa[id] = String(linhas[i][idxLabel]).trim();
+    }
+  } catch (e) {
+    Logger.log("buscarMapaCsv_ falhou para " + url + ": " + e);
+  }
+  return mapa;
+}
+
+function buscarMapaOperadores_() {
+  return buscarMapaCsv_(URL_OPERADORES, ["USER_ID", "OPERATOR_ID", "ID"], ["LDAP", "USERNAME", "NOME"]);
 }
