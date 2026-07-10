@@ -727,6 +727,9 @@
         <option value="60">Parados +1 hora</option>
         <option value="120">Parados +2 horas</option>
       </select>
+      <label class="filtro-check" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;">
+        <input type="checkbox" id="filtro-problema" /> Só com problema de sorting
+      </label>
       <button class="btn btn-secundario" id="btn-expandir">Expandir tudo</button>
       <button class="btn btn-secundario" id="btn-recolher">Recolher tudo</button>
       <button class="btn btn-neutro" id="btn-exportar">Exportar CSV</button>
@@ -1480,18 +1483,25 @@
     atualizarPokaYokeDOM();
   }
 
+  function celulaProblema(pk) {
+    if (!pk) return '<span class="sem-dado">—</span>';
+    var rota = pk.container ? " · Rota " + escapar(pk.container) : "";
+    return '<span class="tag-problema">' +
+        escapar(pk.tipo) + (pk.ldap ? " · " + escapar(pk.ldap) : "") + rota +
+      '</span>';
+  }
+
   // Atualiza só as células de "Problema" já renderizadas, sem re-render
   // completo (Poka Yoke pode chegar depois do render principal).
   function atualizarPokaYokeDOM() {
     $all(".col-problema").forEach(function (td) {
       var id = td.getAttribute("data-id");
       var pk = pokaYoke[id];
-      td.innerHTML = pk
-        ? '<span class="tag-problema" title="' + escapar(pk.container ? "Rota do container: " + pk.container : "") + '">' +
-            escapar(pk.tipo) + (pk.ldap ? " · " + escapar(pk.ldap) : "") +
-          '</span>'
-        : '<span class="sem-dado">—</span>';
+      td.innerHTML = celulaProblema(pk);
+      var tr = td.closest("tr");
+      if (tr) tr.setAttribute("data-problema", pk ? "1" : "0");
     });
+    aplicarFiltros();
   }
 
   // Busca automática de valores a partir de uma planilha publicada (CSV)
@@ -1840,14 +1850,8 @@
         : "";
       var marcado = selecionados[i.id] ? " checked" : "";
       var pk = pokaYoke[i.id];
-      var problemaCel = '<td class="col-problema" data-id="' + escapar(i.id) + '">' +
-        (pk
-          ? '<span class="tag-problema" title="' + escapar(pk.container ? "Rota do container: " + pk.container : "") + '">' +
-              escapar(pk.tipo) + (pk.ldap ? " · " + escapar(pk.ldap) : "") +
-            '</span>'
-          : '<span class="sem-dado">—</span>') +
-      '</td>';
-      return '<tr class="' + classe.trim() + '" data-min="' + i.minutos + '" data-busca="' + escapar((i.id + " " + rota + " " + i.conteudo).toLowerCase()) + '">' +
+      var problemaCel = '<td class="col-problema" data-id="' + escapar(i.id) + '">' + celulaProblema(pk) + '</td>';
+      return '<tr class="' + classe.trim() + '" data-min="' + i.minutos + '" data-problema="' + (pk ? "1" : "0") + '" data-busca="' + escapar((i.id + " " + rota + " " + i.conteudo).toLowerCase()) + '">' +
         '<td class="col-sel"><input type="checkbox" class="sel-row" data-id="' + escapar(i.id) + '"' + marcado + '></td>' +
         '<td class="col-id"><a href="https://envios.adminml.com/logistics/package-management/package/' + encodeURIComponent(i.id) + '" target="_blank" rel="noopener">' + escapar(i.id) + '</a></td>' +
         valorCel +
@@ -2040,6 +2044,7 @@
   // ─── Filtros (busca + tempo parado) ──────────────────────────
   var termoBusca = "";
   var filtroMin  = 0;
+  var filtroProblema = false;
 
   function aplicarFiltros() {
     var termo = normalizar(termoBusca);
@@ -2049,7 +2054,8 @@
         var okBusca = !termo || tr.getAttribute("data-busca").indexOf(termo) !== -1;
         var min = parseInt(tr.getAttribute("data-min") || "0", 10);
         var okTempo = min >= filtroMin;
-        var mostrar = okBusca && okTempo;
+        var okProblema = !filtroProblema || tr.getAttribute("data-problema") === "1";
+        var mostrar = okBusca && okTempo && okProblema;
         tr.style.display = mostrar ? "" : "none";
         if (mostrar) visiveis++;
       });
@@ -2216,9 +2222,10 @@
     $("#file-faltantes").value = "";
     $("#file-valores").value = "";
     $("#busca").value = "";
-    termoBusca = ""; filtroMin = 0;
+    termoBusca = ""; filtroMin = 0; filtroProblema = false;
     $("#filtro-tempo").value = "0";
     $("#filtro-tempo").classList.remove("ativo");
+    $("#filtro-problema").checked = false;
     marcarEtapa(1, "ativa");
     marcarEtapa(2, ""); marcarEtapa(3, ""); marcarEtapa(4, "");
     $("#topo").scrollIntoView({ behavior: "smooth" });
@@ -2270,6 +2277,7 @@
 
     $("#busca").addEventListener("input", function () { termoBusca = this.value; aplicarFiltros(); });
     $("#filtro-tempo").addEventListener("change", function () { filtroMin = parseInt(this.value, 10) || 0; aplicarFiltros(); });
+    $("#filtro-problema").addEventListener("change", function () { filtroProblema = this.checked; aplicarFiltros(); });
     $("#btn-sel-visiveis").addEventListener("click", selecionarVisiveis);
     $("#btn-expandir").addEventListener("click", function () {
       $all(".rota-cartao").forEach(function (c) { c.classList.remove("recolhido"); });
