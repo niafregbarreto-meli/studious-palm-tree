@@ -1051,14 +1051,24 @@
   }
 
   // Converte o horário em epoch ms absoluto. Aceita:
+  // - dd/mm/aaaa hh:mm[:ss] (formato nativo do "Data de Inbound" do CSV de
+  //   faltantes) — os dígitos são o horário de São Paulo (sem fuso no CSV).
   // - número serial do Google Sheets (dias desde 1899-12-30): os dígitos são
   //   tratados como o horário de pt-SP (evita o fuso configurado na planilha
   //   distorcer 1h ao ler com FORMATTED_VALUE).
-  // - string (CSV do BigQuery). Se não trouxer fuso, assume São Paulo (-03:00).
+  // - string ISO (CSV do BigQuery). Se não trouxer fuso, assume São Paulo (-03:00).
   function parseDataHora(txt) {
     if (txt === null || txt === undefined || txt === "") return 0;
     if (typeof txt === "number") return serialSheetsParaEpoch(txt);
     var s = txt.toString().trim();
+    if (!s) return 0;
+
+    var mBR = s.match(/^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+    if (mBR) {
+      var d = +mBR[1], mo = +mBR[2], y = +mBR[3], h = +mBR[4], mi = +mBR[5], se = mBR[6] ? +mBR[6] : 0;
+      return Date.UTC(y, mo - 1, d, h, mi, se) + 3 * 3600000;
+    }
+
     if (/^\d+(\.\d+)?$/.test(s)) return serialSheetsParaEpoch(parseFloat(s));
     s = s.replace(" ", "T");
     if (!/([+\-]\d{2}:?\d{2}|Z)$/.test(s)) s += "-03:00";
@@ -1236,12 +1246,20 @@
     var idxLoc   = acharColuna(cab, ["Localização do pacote", "Localizacao do pacote", "Localização", "Localizacao"]);
     var idxParada= acharColuna(cab, ["Parada"]);
     var idxPonto = acharColuna(cab, ["Ponto"]);
+    // "Data de Inbound" é a fonte NATIVA e autoritativa do horário de entrada
+    // na estação — vem direto do sistema-fonte, sem o desvio de horário que
+    // nosso cálculo via BigQuery apresentava. Quando presente, substitui
+    // qualquer horário derivado; quando a coluna existe mas vem vazia, o
+    // pacote é de um ciclo anterior (ex.: retornou de uma falha de entrega
+    // do dia anterior) e é DESCONSIDERADO da lista de bingo.
+    var idxInbound = acharColuna(cab, ["Data de Inbound", "Data de inbound", "DataDeInbound", "Data Inbound", "INBOUND"]);
 
     if (idxId === -1 || idxLoc === -1) {
       toast("Não foi possível identificar as colunas 'ID do pacote' e 'Localização do pacote'.");
       return;
     }
 
+    var descartadosSemInbound = 0;
     faltantes = [];
     for (var i = 1; i < linhas.length; i++) {
       var l = linhas[i];
@@ -1250,6 +1268,17 @@
       if (loc !== "na estacao") continue;
       var id = (l[idxId] || "").trim();
       if (!id) continue;
+
+      var inboundTxt = idxInbound !== -1 ? (l[idxInbound] || "").trim() : "";
+      if (idxInbound !== -1 && !inboundTxt) {
+        // coluna existe nesta exportação, mas está vazia neste pacote:
+        // ciclo anterior, não relevante hoje — descarta.
+        descartadosSemInbound++;
+        continue;
+      }
+      var inboundMs = inboundTxt ? parseDataHora(inboundTxt) : 0;
+      if (inboundMs) entradas[id] = inboundMs; // autoritativo, sobrepõe o da planilha
+
       var rotaComp = (idxRota !== -1 ? l[idxRota] : "") || "";
       faltantes.push({
         id: id,
@@ -1262,8 +1291,13 @@
     }
 
     if (faltantes.length === 0) {
-      toast("Nenhum pacote com localização 'Na estação' foi encontrado.");
+      toast(descartadosSemInbound > 0
+        ? "Todos os pacotes 'Na estação' eram de ciclo anterior (sem Data de Inbound) e foram descartados."
+        : "Nenhum pacote com localização 'Na estação' foi encontrado.");
       return;
+    }
+    if (descartadosSemInbound > 0) {
+      toast(descartadosSemInbound + " pacote(s) sem Data de Inbound (ciclo anterior) foram descartados.");
     }
 
     // guarda o texto para restaurar a tela automaticamente se a página for
