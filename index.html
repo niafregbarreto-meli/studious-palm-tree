@@ -1596,12 +1596,13 @@
     }
     comValores = true;
 
-    // Popula as "entradas" (horário de entrada na estação) a partir do CSV.
-    // Fica guardado/compartilhado: nas próximas cargas de faltantes o tempo
-    // segue contando ao vivo sem precisar recarregar os valores.
+    // Popula as "entradas" (horário de entrada na estação) a partir do CSV,
+    // só para os IDs que ainda não têm um horário vindo da "Data de Inbound"
+    // nativa do CSV de faltantes (fonte autoritativa) — o ENTROU_STATION do
+    // BigQuery é só um fallback e NUNCA deve sobrepor o valor nativo.
     var novosHorarios = 0;
     Object.keys(valores).forEach(function (id) {
-      if (valores[id].entrou) { entradas[id] = valores[id].entrou; novosHorarios++; }
+      if (valores[id].entrou && !entradas[id]) { entradas[id] = valores[id].entrou; novosHorarios++; }
     });
     salvarColab();
     aplicarTempos();
