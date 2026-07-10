@@ -1460,7 +1460,7 @@
     var idxTipo  = cab.indexOf("EVENT_TYPE_PT");
     var idxTipoOrig = cab.indexOf("EVENT_TYPE_ORIGINAL");
     var idxLdap  = cab.indexOf("OPERATOR_LDAP");
-    var idxCont  = cab.indexOf("CONTAINER_NOME");
+    var idxCont  = cab.indexOf("ROTAOT_CONTAINER");
     var idxContId= cab.indexOf("CONTAINER_ID");
     if (idxId === -1) return;
 
@@ -1487,7 +1487,7 @@
       var id = td.getAttribute("data-id");
       var pk = pokaYoke[id];
       td.innerHTML = pk
-        ? '<span class="tag-problema" title="' + escapar(pk.container ? "Container: " + pk.container : "") + '">' +
+        ? '<span class="tag-problema" title="' + escapar(pk.container ? "Rota do container: " + pk.container : "") + '">' +
             escapar(pk.tipo) + (pk.ldap ? " · " + escapar(pk.ldap) : "") +
           '</span>'
         : '<span class="sem-dado">—</span>';
@@ -1842,7 +1842,7 @@
       var pk = pokaYoke[i.id];
       var problemaCel = '<td class="col-problema" data-id="' + escapar(i.id) + '">' +
         (pk
-          ? '<span class="tag-problema" title="' + escapar(pk.container ? "Container: " + pk.container : "") + '">' +
+          ? '<span class="tag-problema" title="' + escapar(pk.container ? "Rota do container: " + pk.container : "") + '">' +
               escapar(pk.tipo) + (pk.ldap ? " · " + escapar(pk.ldap) : "") +
             '</span>'
           : '<span class="sem-dado">—</span>') +

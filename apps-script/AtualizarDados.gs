@@ -237,10 +237,8 @@ function criarGatilhoAtualizacao() {
 // Planilha publicada (CSV) que traduz OPERATOR_ID -> LDAP (nome de usuário).
 var URL_OPERADORES = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSAhBGJhmdVNCbHAcalGpzzoi_dUg0l7oD8VcZPDU47nx5KtRhQfzpfZ93-NK8Lk6Xo1a68jM2aUc1m/pub?gid=1229051516&single=true&output=csv";
 
-// TODO: quando disponível, preencher com a planilha publicada que traduz
-// CONTAINER_ID (e WRONG_CONTAINER_ID) -> nome da rota. Até lá, o ID do
-// container aparece em bruto na aba POKAYOKE e na app.
-var URL_CONTAINERS = "";
+// Planilha publicada (CSV) que traduz CONTAINER_ID -> ROTAOT (rota otimizada).
+var URL_CONTAINERS = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ5DW6wEKmJICM9ijwUQR_06YYJNLiXFSjzDiPd04WcXcgoRRz2kW8h8LyCxeMEnxvvcOKnYGhwJa2f/pub?gid=1505849780&single=true&output=csv";
 
 var ABA_POKAYOKE = "POKAYOKE";
 
@@ -270,9 +268,9 @@ function traduzirEvento_(tipo) {
 function atualizarPokaYoke() {
   var linhasBQ = executarSqlBigQuery_(SQL_POKAYOKE);
   var mapaOperadores = buscarMapaOperadores_();
-  var mapaContainers = URL_CONTAINERS ? buscarMapaCsv_(URL_CONTAINERS) : {};
+  var mapaContainers = URL_CONTAINERS ? buscarMapaCsv_(URL_CONTAINERS, ["CONTAINER_ID"], ["ROTAOT"]) : {};
 
-  var linhas = [["SHIPMENT_ID", "EVENT_TYPE_ORIGINAL", "EVENT_TYPE_PT", "OPERATOR_ID", "OPERATOR_LDAP", "CONTAINER_ID", "CONTAINER_NOME", "WRONG_CONTAINER_ID", "EVENT_DATE"]];
+  var linhas = [["SHIPMENT_ID", "EVENT_TYPE_ORIGINAL", "EVENT_TYPE_PT", "OPERATOR_ID", "OPERATOR_LDAP", "CONTAINER_ID", "ROTAOT_CONTAINER", "WRONG_CONTAINER_ID", "EVENT_DATE"]];
   linhasBQ.forEach(function (row) {
     // ordem da SQL: CONTAINER_ID, EVENT_DATE, EVENT_TYPE, OPERATOR_ID, SHIPMENT_ID, WRONG_CONTAINER_ID, WRONG_SHIPMENT_ID
     var containerId = row[0], eventDate = row[1], eventType = row[2];
